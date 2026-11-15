@@ -60,7 +60,7 @@ class TestToolRegistry:
         assert "site_crawler.py" in argv[-3] or any("site_crawler" in a for a in argv)
 
     def test_popen_called_with_shell_false(self) -> None:
-        from app.runner import run_tool_sync
+        from app.runner import run_tool
         from unittest.mock import patch, MagicMock
         record = _make_record("test-shell-check")
         plan = _make_plan()
@@ -75,7 +75,7 @@ class TestToolRegistry:
             mock_proc.stderr.readline.return_value = ""
             mock_popen.return_value = mock_proc
             # Consume generator
-            list(run_tool_sync(record, plan))
+            list(run_tool(record, plan))
             assert mock_popen.called
             _, kwargs = mock_popen.call_args
             assert kwargs.get("shell") is False
