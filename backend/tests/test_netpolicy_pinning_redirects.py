@@ -61,9 +61,19 @@ class TestIPPinningSecurity:
         assert ctx.check_hostname is True
 
     def test_peer_ip_mismatch_aborts(self) -> None:
-        err = IPPinningError("ip_pinning_failed: peer '192.0.2.1' != pinned '93.184.216.34'")
-        assert "ip_pinning_failed" in str(err)
-        assert issubclass(IPPinningError, Exception)
+        backend = _PinnedNetworkBackend(allow_localhost=True)
+
+        def fake_connect(host: str, port: int, **kwargs: object) -> MagicMock:
+            mock_stream = MagicMock()
+            mock_sock = MagicMock()
+            mock_sock.getpeername.return_value = ("192.0.2.99", port)  # Mismatch with pinned IP!
+            mock_stream._sock = mock_sock
+            return mock_stream
+
+        with patch("httpcore.SyncBackend.connect_tcp", side_effect=fake_connect):
+            with patch("socket.getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 0))]):
+                with pytest.raises(IPPinningError, match="ip_pinning_failed: peer"):
+                    backend.connect_tcp("example.com", 80)
 
     def test_no_code_path_makes_unpinned_request(self) -> None:
         """Verify that _PinnedNetworkBackend dials an IP address, never an unpinned hostname."""
