@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Links Test Page</title>
+</head>
+<body>
+<h1>Links Test Page</h1>
+<p>Testing link status, robots filtering, and SSRF blocking.</p>
+<nav>
+    <a href="/about.html">Working Link</a>
+    <a href="/private/index.html">Robots Disallowed Link</a>
+    <a href="http://169.254.169.254/latest/meta-data/">SSRF Metadata Link</a>
+</nav>
+</body>
+</html>

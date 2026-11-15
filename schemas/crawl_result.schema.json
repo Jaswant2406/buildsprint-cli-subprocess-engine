@@ -1,0 +1,93 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CrawlResult",
+  "type": "object",
+  "required": ["site", "crawled_at", "pages", "skipped", "errors", "stats"],
+  "properties": {
+    "site": {
+      "type": "string",
+      "format": "uri"
+    },
+    "crawled_at": {
+      "type": "string"
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "url",
+          "status_code",
+          "title",
+          "meta_description",
+          "language",
+          "h1_headings",
+          "h2_headings",
+          "main_text",
+          "links_count",
+          "images_count",
+          "emails",
+          "phones",
+          "social_links",
+          "tech_hints"
+        ],
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "status_code": { "type": "integer" },
+          "title": { "type": "string" },
+          "meta_description": { "type": "string" },
+          "language": { "type": "string" },
+          "h1_headings": { "type": "array", "items": { "type": "string" } },
+          "h2_headings": { "type": "array", "items": { "type": "string" } },
+          "main_text": { "type": "string" },
+          "links_count": { "type": "integer", "minimum": 0 },
+          "images_count": { "type": "integer", "minimum": 0 },
+          "emails": { "type": "array", "items": { "type": "string" } },
+          "phones": { "type": "array", "items": { "type": "string" } },
+          "social_links": {
+            "type": "object",
+            "properties": {
+              "twitter": { "type": "string" },
+              "linkedin": { "type": "string" },
+              "github": { "type": "string" },
+              "facebook": { "type": "string" },
+              "instagram": { "type": "string" },
+              "youtube": { "type": "string" }
+            }
+          },
+          "tech_hints": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "skipped": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url", "reason"],
+        "properties": {
+          "url": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["url", "error"],
+        "properties": {
+          "url": { "type": "string" },
+          "error": { "type": "string" }
+        }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "required": ["pages_crawled", "duration_s"],
+      "properties": {
+        "pages_crawled": { "type": "integer", "minimum": 0 },
+        "duration_s": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

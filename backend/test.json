@@ -1,0 +1,16 @@
+{
+  "site": "http://127.0.0.1:9999/index.html",
+  "crawled_at": "2026-11-15T17:59:52Z",
+  "pages": [],
+  "skipped": [],
+  "errors": [
+    {
+      "url": "http://127.0.0.1:9999/index.html",
+      "error": "[WinError 10061] No connection could be made because the target machine actively refused it"
+    }
+  ],
+  "stats": {
+    "pages_crawled": 0,
+    "duration_s": 4.13
+  }
+}
