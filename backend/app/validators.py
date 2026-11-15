@@ -41,6 +41,14 @@ def validate_url(url: str, allow_localhost: bool = False) -> str:
     if not host:
         raise ValidationError("URL has no hostname", "missing_hostname")
 
+    port = parsed.port
+    if port is not None:
+        if not allow_localhost and port not in (80, 443, 8080, 8443):
+            raise ValidationError(
+                f"Port {port} is not allowed; only HTTP/HTTPS ports (80, 443, 8080, 8443) allowed",
+                "forbidden_port",
+            )
+
     try:
         _resolve_and_validate(host, allow_localhost=allow_localhost)
     except SSRFError as e:
