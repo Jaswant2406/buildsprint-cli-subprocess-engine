@@ -59,6 +59,27 @@ class TestToolRegistry:
         assert sys.executable in argv
         assert "site_crawler.py" in argv[-3] or any("site_crawler" in a for a in argv)
 
+    def test_popen_called_with_shell_false(self) -> None:
+        from app.runner import run_tool_sync
+        from unittest.mock import patch, MagicMock
+        record = _make_record("test-shell-check")
+        plan = _make_plan()
+        with patch("subprocess.Popen") as mock_popen:
+            mock_proc = MagicMock()
+            mock_proc.pid = 99999
+            mock_proc.poll.return_value = 0
+            mock_proc.returncode = 0
+            mock_proc.stdout = MagicMock()
+            mock_proc.stdout.read.return_value = b""
+            mock_proc.stderr = MagicMock()
+            mock_proc.stderr.readline.return_value = ""
+            mock_popen.return_value = mock_proc
+            # Consume generator
+            list(run_tool_sync(record, plan))
+            assert mock_popen.called
+            _, kwargs = mock_popen.call_args
+            assert kwargs.get("shell") is False
+
     def test_unknown_tool_raises(self) -> None:
         plan = Plan(
             task_type="crawl",
