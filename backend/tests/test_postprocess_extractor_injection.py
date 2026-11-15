@@ -211,3 +211,25 @@ class TestSummarizer:
         assert len(citations) > 0
         assert "https://example.com/pricing" in citations
         assert "$29" in ans
+
+    def test_llm_summarize_wraps_content_in_untrusted_delimiters(self) -> None:
+        from unittest.mock import patch
+        from typing import Any
+        from app.summarizer import summarize, _DATA_OPEN, _DATA_CLOSE
+        captured_prompts = []
+
+        def fake_call_llm(system_prompt: str, user_prompt: str, **kwargs: Any) -> str:
+            captured_prompts.append((system_prompt, user_prompt))
+            return "SUMMARY: Test summary of the site.\nTAKEAWAYS:\n- Takeaway 1"
+
+        crawl_data = {
+            "site": "https://example.com",
+            "pages": [{"url": "https://example.com", "main_text": "Sample text"}],
+        }
+        with patch("app.summarizer.call_llm", side_effect=fake_call_llm):
+            summarize(crawl_data)
+        assert len(captured_prompts) == 1
+        sys_p, usr_p = captured_prompts[0]
+        assert _DATA_OPEN in sys_p and _DATA_CLOSE in sys_p
+        assert _DATA_OPEN in usr_p and _DATA_CLOSE in usr_p
+
