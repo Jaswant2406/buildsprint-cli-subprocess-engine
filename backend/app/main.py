@@ -66,8 +66,11 @@ def _make_sse_event(event: str, data: Any, run_id: str = "") -> dict[str, str]:
     return {"event": event, "data": json.dumps(payload)}
 
 
-def _json_error(status_code: int, error: str, **extra: Any) -> HTTPException:
-    return HTTPException(status_code=status_code, detail={"error": error, **extra})
+def _json_error(status_code: int, error: str, headers: dict[str, str] | None = None, **extra: Any) -> HTTPException:
+    h = dict(headers or {})
+    if "retry_after_s" in extra and "Retry-After" not in h:
+        h["Retry-After"] = str(extra["retry_after_s"])
+    return HTTPException(status_code=status_code, detail={"error": error, **extra}, headers=h or None)
 
 
 # ---------------------------------------------------------------------------

@@ -348,6 +348,19 @@ class TestAPIEndpoints:
         assert resp.status_code in (200, 204)
         assert resp.headers.get("access-control-allow-origin") == "http://localhost:5173"
 
+    def test_rate_limit_exceeded_returns_429_with_retry_after_header(self, app_client: TestClient) -> None:
+        """After 5 chat requests from same IP, 6th returns 429 with Retry-After header."""
+        from app.main import _rate_limiter
+        _rate_limiter._windows.clear()
+        for _ in range(5):
+            resp = app_client.post("/api/chat", json={"prompt": "Crawl https://example.com"})
+            assert resp.status_code == 200
+        # 6th request
+        resp = app_client.post("/api/chat", json={"prompt": "Crawl https://example.com"})
+        assert resp.status_code == 429
+        assert "Retry-After" in resp.headers
+        assert int(resp.headers["Retry-After"]) > 0
+
     def test_slots_released_across_three_chat_requests(self, app_client: TestClient, local_site: str) -> None:
         """Sequential chat requests beyond slot capacity (2) succeed because slots are released."""
         for i in range(3):
