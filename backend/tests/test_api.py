@@ -354,7 +354,7 @@ class TestAPIEndpoints:
             with app_client.stream(
                 "POST",
                 "/api/chat",
-                json={"message": f"Crawl {local_site}/index.html run {i}"},
+                json={"prompt": f"Crawl {local_site}/index.html run {i}"},
             ) as resp:
                 assert resp.status_code == 200
                 content = "".join(resp.iter_text())
