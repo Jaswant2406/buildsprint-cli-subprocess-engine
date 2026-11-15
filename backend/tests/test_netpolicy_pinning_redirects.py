@@ -139,6 +139,10 @@ class TestRedirectsAndRobots:
         )
         assert any(_same_site("otherdomain.com", d) for d in policy.allowed_domains)
 
+    def test_default_max_hops_is_three(self) -> None:
+        policy = RedirectPolicy()
+        assert policy.max_hops == 3
+
     def test_robots_5xx_disallows_all(self) -> None:
         clear_robots_cache()
         from urllib.robotparser import RobotFileParser
