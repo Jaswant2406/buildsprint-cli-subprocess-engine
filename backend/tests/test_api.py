@@ -347,3 +347,17 @@ class TestAPIEndpoints:
         )
         assert resp.status_code in (200, 204)
         assert resp.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+    def test_slots_released_across_three_chat_requests(self, app_client: TestClient, local_site: str) -> None:
+        """Sequential chat requests beyond slot capacity (2) succeed because slots are released."""
+        for i in range(3):
+            with app_client.stream(
+                "POST",
+                "/api/chat",
+                json={"message": f"Crawl {local_site}/index.html run {i}"},
+            ) as resp:
+                assert resp.status_code == 200
+                content = "".join(resp.iter_text())
+                assert "server busy" not in content
+                assert "no_slots" not in content
+
