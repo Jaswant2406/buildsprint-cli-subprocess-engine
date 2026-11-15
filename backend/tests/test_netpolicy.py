@@ -294,3 +294,34 @@ class TestLocalSiteCrawl:
                 f"{local_site}/private/index.html",
                 allow_localhost=True,
             )
+
+
+class TestValidatorsAndEdgeCases:
+    def test_validate_url_empty_raises(self) -> None:
+        from app.validators import validate_url, ValidationError
+        with pytest.raises(ValidationError, match="required"):
+            validate_url("")
+
+    def test_validate_url_no_hostname_raises(self) -> None:
+        from app.validators import validate_url, ValidationError
+        with pytest.raises(ValidationError, match="no hostname"):
+            validate_url("http:///path/only")
+
+    def test_validate_url_regex_creds(self) -> None:
+        from app.validators import validate_url, ValidationError
+        with pytest.raises(ValidationError, match="credentials"):
+            validate_url("http://user:secret@example.com")
+        with pytest.raises(ValidationError, match="credentials"):
+            validate_url("http://:@example.com")
+
+    def test_alternative_ip_dotted_hex(self) -> None:
+        from app.netpolicy import _parse_alternative_ip
+        ip = _parse_alternative_ip("0x7f.0.0.1")
+        assert ip == ipaddress.IPv4Address("127.0.0.1")
+
+    def test_ipv4_mapped_ipv6(self) -> None:
+        from app.netpolicy import _is_forbidden_ip
+        mapped = ipaddress.IPv6Address("::ffff:127.0.0.1")
+        forbidden, reason = _is_forbidden_ip(mapped)
+        assert forbidden
+        assert reason == "loopback"

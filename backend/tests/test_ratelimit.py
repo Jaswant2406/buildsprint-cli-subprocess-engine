@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+import time
 from app.ratelimit import RateLimiter, get_client_ip
 from tests.conftest import FakeClock
 
@@ -75,3 +76,13 @@ class TestClientIPExtraction:
         # 10.0.0.1 and 10.0.0.2 are trusted proxies
         ip = get_client_ip(scope, trusted_proxies=["10.0.0.1", "10.0.0.2"])
         assert ip == "203.0.113.50"
+
+    def test_evict_all_expired_and_empty_deque_cleanup(self) -> None:
+        limiter = RateLimiter(limit=2, window_s=10)
+        limiter.check("1.2.3.4")
+        assert "1.2.3.4" in limiter._windows
+        # Advance time beyond window
+        limiter._clock = lambda: time.time() + 20
+        limiter.evict_all_expired()
+        assert "1.2.3.4" not in limiter._windows
+

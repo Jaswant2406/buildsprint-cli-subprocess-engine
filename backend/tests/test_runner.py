@@ -276,3 +276,26 @@ class TestAuditChain:
         assert resp.status_code in (200, 409)
         data = resp.json()
         assert data.get("state") == "cancelled" or "already_terminal" in data.get("error", "")
+
+    def test_build_argv_link_checker(self) -> None:
+        plan = Plan(task_type="check_links", tool="link_checker", tool_reason="test", url="https://example.com", max_links=15)
+        argv = build_argv(plan, "out.json")
+        assert "--max-links" in argv
+        assert "15" in argv
+
+    def test_slot_manager_extra_release(self) -> None:
+        sm = get_slot_manager()
+        # Release extra to trigger ValueError guard
+        sm.release()
+
+    def test_security_json_formatter_exception(self) -> None:
+        from app.security import _JSONFormatter
+        import logging
+        formatter = _JSONFormatter()
+        try:
+            raise ValueError("test error")
+        except ValueError:
+            record = logging.LogRecord("test", logging.ERROR, "test.py", 10, "msg", (), sys.exc_info())
+            formatted = formatter.format(record)
+            assert "ValueError: test error" in formatted
+
