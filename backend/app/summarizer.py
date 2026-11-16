@@ -36,10 +36,73 @@ TAKEAWAYS:
 """.strip()
 
 
+_COMMON_ALLOWED_ACRONYMS = {
+    "HTML", "HTTP", "HTTPS", "URL", "JSON", "API", "GET", "POST",
+    "ID", "SUMMARY", "TAKEAWAYS", "OK", "FAQ", "TLDR", "CSS", "JS",
+}
+
+
+def _build_corpus(crawl_data: dict[str, Any]) -> str:
+    """Consolidate all raw crawled text into a single reference corpus for grounding checks."""
+    parts = [crawl_data.get("site", "")]
+    for p in crawl_data.get("pages", []):
+        parts.append(p.get("title", ""))
+        parts.append(p.get("meta_description", ""))
+        parts.extend(p.get("h1_headings", []))
+        parts.extend(p.get("h2_headings", []))
+        parts.append(p.get("main_text", ""))
+    return " ".join(parts)
+
+
+def find_ungrounded_facts(text: str, corpus: str) -> list[str]:
+    """
+    Detect named facts (names, multi-digit numbers, years, RFCs, acronyms)
+    present in the text that are absent from the source corpus.
+    """
+    corpus_lower = corpus.lower()
+    ungrounded: list[str] = []
+
+    # 1. RFC specifications (e.g. RFC 2606)
+    rfcs = re.findall(r"\bRFC\s*\d+\b", text, re.IGNORECASE)
+    for r in rfcs:
+        if r.lower() not in corpus_lower:
+            ungrounded.append(r)
+
+    # 2. Multi-digit numbers, years, percentages, dollar amounts
+    nums = re.findall(r"\b(?:\$\d+|\d{2,}|\d+%\b|\d+\.\d+)\b", text)
+    for n in nums:
+        if n.lower() not in corpus_lower:
+            ungrounded.append(n)
+
+    # 3. All-caps acronyms (2+ letters, e.g. IANA, NATO)
+    acronyms = re.findall(r"\b[A-Z]{2,}\b", text)
+    for a in acronyms:
+        if a in _COMMON_ALLOWED_ACRONYMS:
+            continue
+        if a.lower() not in corpus_lower:
+            ungrounded.append(a)
+
+    # 4. Capitalized multi-word proper entities (e.g. Internet Assigned Numbers Authority)
+    common_starters = {
+        "the", "this", "that", "these", "those", "in", "for", "on", "with",
+        "from", "as", "key", "please", "a", "an", "all", "our", "their",
+    }
+    names = re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b", text)
+    for name in names:
+        words = name.split()
+        filtered = " ".join(w for w in words if w.lower() not in common_starters)
+        if filtered and filtered.lower() not in corpus_lower:
+            ungrounded.append(name)
+
+    return list(dict.fromkeys(ungrounded))
+
+
 def summarize(crawl_data: dict[str, Any]) -> tuple[str, list[str]]:
     """
     Summarize crawl data.
     Returns (summary_text, key_takeaways_list).
+    Validates that LLM output is grounded in the crawl data; if ungrounded named
+    facts or hallucinations are detected, prunes them or falls back to extractive summary.
     """
     # Build a text representation of the crawl data
     page_texts = _build_page_texts(crawl_data)
@@ -48,7 +111,39 @@ def summarize(crawl_data: dict[str, Any]) -> tuple[str, list[str]]:
 
     # Try LLM first
     try:
-        return _llm_summarize(page_texts, crawl_data)
+        summary, takeaways = _llm_summarize(page_texts, crawl_data)
+
+        # Grounding check: verify no invented named facts (names, numbers, RFCs, claims)
+        corpus = _build_corpus(crawl_data)
+        summary_ungrounded = find_ungrounded_facts(summary, corpus)
+
+        # Filter takeaways: drop any takeaway containing ungrounded facts
+        grounded_takeaways = []
+        dropped_takeaway_facts = []
+        for t in takeaways:
+            t_ungrounded = find_ungrounded_facts(t, corpus)
+            if t_ungrounded:
+                dropped_takeaway_facts.extend(t_ungrounded)
+            else:
+                grounded_takeaways.append(t)
+
+        if summary_ungrounded:
+            logger.warning(
+                "LLM summary contains ungrounded claims absent from crawl data: %s",
+                summary_ungrounded,
+            )
+            ext_summary, ext_takeaways = _heuristic_summarize(crawl_data)
+            facts_str = ", ".join(f"'{f}'" for f in sorted(dict.fromkeys(summary_ungrounded)))
+            note = f"[Note: LLM summary contained ungrounded claims absent from crawl data ({facts_str}); fell back to extractive summary for verified grounding.]"
+            return f"{ext_summary}\n\n{note}" if ext_summary else note, ext_takeaways
+
+        # If summary was clean but all takeaways were dropped due to ungrounded claims:
+        if not grounded_takeaways and takeaways:
+            _, ext_takeaways = _heuristic_summarize(crawl_data)
+            grounded_takeaways = ext_takeaways
+
+        return summary, grounded_takeaways
+
     except (LLMError, Exception) as e:
         logger.info(f"LLM summarize failed ({e}), using heuristic")
         summary, takeaways = _heuristic_summarize(crawl_data)

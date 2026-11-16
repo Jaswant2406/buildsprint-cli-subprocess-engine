@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """
-scripts/demo_llm_paths.py — Demonstrates:
-1. Active LLM execution path (showing intent plan and summary produced by the LLM).
-2. Bad / expired API key execution path (showing honest fallback note without crashing).
+backend/scripts/verify_mocked_llm_fallback.py
+
+MOCKED-PROVIDER TEST ONLY:
+This script uses simulated/mocked LLM responses to test intent parsing and
+fallback behavior offline. It is strictly an automated test harness and is
+NOT evidence of a real live external LLM API call.
 """
 from __future__ import annotations
 
@@ -28,7 +31,8 @@ PROMPT = "Crawl https://example.com, extract the important information, give me 
 
 def run_llm_success_demo() -> None:
     print("=" * 70)
-    print("DEMO 1: ACTIVE LLM EXECUTION PATH (LLM_PROVIDER=openai, LLM_MODEL=gpt-4o-mini)")
+    print("[MOCK HARNESS] TEST 1: MOCKED LLM PATH (LLM_PROVIDER=openai, LLM_MODEL=gpt-4o-mini)")
+    print("NOTE: Using simulated mock provider; NOT a live external API call.")
     print("=" * 70)
 
     mock_settings = Settings(
@@ -115,7 +119,8 @@ def run_llm_success_demo() -> None:
 
 def run_bad_expired_key_demo() -> None:
     print("=" * 70)
-    print("DEMO 2: BAD / EXPIRED API KEY FALLBACK (LLM_API_KEY=sk-EXPIRED-KEY-999999)")
+    print("[MOCK HARNESS] TEST 2: MOCKED 401 EXPIRED KEY FALLBACK TEST")
+    print("NOTE: Simulating 401 Unauthorized; verifying graceful heuristic fallback.")
     print("=" * 70)
 
     mock_settings = Settings(

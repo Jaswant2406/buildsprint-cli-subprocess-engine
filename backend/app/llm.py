@@ -31,9 +31,9 @@ def call_llm(
 
     if provider in ("openai", "azure_openai"):
         return _call_openai(api_key, model, system_prompt, user_prompt, max_tokens, temperature)
-    elif provider == "anthropic":
+    elif provider in ("anthropic", "claude"):
         return _call_anthropic(api_key, model, system_prompt, user_prompt, max_tokens, temperature)
-    elif provider == "google":
+    elif provider in ("google", "gemini"):
         return _call_google(api_key, model, system_prompt, user_prompt, max_tokens, temperature)
     else:
         raise LLMError(f"Unknown LLM provider: {provider!r}")
@@ -45,24 +45,31 @@ def _call_openai(
 ) -> str:
     import httpx
     model = model or "gpt-4o-mini"
-    resp = httpx.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        },
-        timeout=30.0,
-    )
+    try:
+        resp = httpx.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            },
+            timeout=30.0,
+        )
+    except httpx.HTTPError as exc:
+        raise LLMError(f"OpenAI network error: {exc}") from exc
+
     if resp.status_code != 200:
         raise LLMError(f"OpenAI error {resp.status_code}: {resp.text[:200]}")
-    data = resp.json()
-    return data["choices"][0]["message"]["content"]
+    try:
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, ValueError) as exc:
+        raise LLMError(f"OpenAI response parse error: {exc}") from exc
 
 
 def _call_anthropic(
@@ -71,26 +78,33 @@ def _call_anthropic(
 ) -> str:
     import httpx
     model = model or "claude-3-haiku-20240307"
-    resp = httpx.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={
-            "x-api-key": api_key,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": model,
-            "max_tokens": max_tokens,
-            "system": system,
-            "messages": [{"role": "user", "content": user}],
-            "temperature": temperature,
-        },
-        timeout=30.0,
-    )
+    try:
+        resp = httpx.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "max_tokens": max_tokens,
+                "system": system,
+                "messages": [{"role": "user", "content": user}],
+                "temperature": temperature,
+            },
+            timeout=30.0,
+        )
+    except httpx.HTTPError as exc:
+        raise LLMError(f"Anthropic network error: {exc}") from exc
+
     if resp.status_code != 200:
         raise LLMError(f"Anthropic error {resp.status_code}: {resp.text[:200]}")
-    data = resp.json()
-    return data["content"][0]["text"]
+    try:
+        data = resp.json()
+        return data["content"][0]["text"]
+    except (KeyError, IndexError, ValueError) as exc:
+        raise LLMError(f"Anthropic response parse error: {exc}") from exc
 
 
 def _call_google(
@@ -100,15 +114,23 @@ def _call_google(
     import httpx
     model = model or "gemini-1.5-flash"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-    resp = httpx.post(
-        url,
-        json={
-            "contents": [{"role": "user", "parts": [{"text": f"{system}\n\n{user}"}]}],
-            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": temperature},
-        },
-        timeout=30.0,
-    )
+    try:
+        resp = httpx.post(
+            url,
+            headers={"Content-Type": "application/json"},
+            json={
+                "contents": [{"role": "user", "parts": [{"text": f"{system}\n\n{user}"}]}],
+                "generationConfig": {"maxOutputTokens": max_tokens, "temperature": temperature},
+            },
+            timeout=30.0,
+        )
+    except httpx.HTTPError as exc:
+        raise LLMError(f"Google/Gemini network error: {exc}") from exc
+
     if resp.status_code != 200:
-        raise LLMError(f"Google error {resp.status_code}: {resp.text[:200]}")
-    data = resp.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+        raise LLMError(f"Google/Gemini error {resp.status_code}: {resp.text[:200]}")
+    try:
+        data = resp.json()
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError, ValueError) as exc:
+        raise LLMError(f"Google/Gemini response parse error: {exc}") from exc

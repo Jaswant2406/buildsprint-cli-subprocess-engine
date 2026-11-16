@@ -10,7 +10,7 @@ A production-grade, secure, and resilient execution backend for AI-driven web ta
 # 1. Create virtual environment and install dependencies
 python -m venv .venv && .venv/Scripts/pip install -r backend/requirements.txt
 
-# 2. Run the complete test suite (145 tests passing)
+# 2. Run the complete test suite (151 tests passing)
 cd backend && ../.venv/Scripts/pytest -v
 
 # 3. Start the FastAPI server
@@ -161,6 +161,9 @@ The backend underwent an exhaustive hostile verification audit across all securi
    - `python -u backend/scripts/verify_stage4_hostile.py` spins up a live mock server simulating 4+ hop loops, private redirects, 100MB gzip bombs, non-responsive servers, and multi-location prompt injections, confirming strict termination, bounded memory (<50MB delta), and zero unauthorized child processes.
 4. **Secrets Canary Audit**:
    - `python -u backend/scripts/verify_secrets_canary.py` injects a live canary secret (`sk-CANARY-1234567890`) across success, failure, and prompt injection runs. Zero occurrences appear in SSE streams, reports, logs, audit chains, or CLI outputs.
+5. **LLM Provider Integration Status**:
+   - **Real External LLM Calls (Live Network)**: **UNVERIFIED** (requires user-supplied API key in `.env`; not marked verified until live invocation with valid user key).
+   - **Mocked Provider & Fallback Mechanisms**: **VERIFIED** (mocked providers, expired/invalid keys, 401/429 HTTP statuses, ungrounded hallucination detection, and automatic honest fallbacks to extractive heuristic mode are 100% verified via automated tests).
 
 ---
 

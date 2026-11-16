@@ -274,3 +274,42 @@ class TestSummarizer:
                 assert "401" in summary
                 assert len(takeaways) >= 1
 
+    def test_llm_summarize_grounding_check_detects_invented_facts_and_falls_back(self) -> None:
+        """When LLM invents facts (RFCs, dates, acronyms) absent from crawl data, fallback to extractive."""
+        from unittest.mock import patch
+
+        from app.summarizer import summarize
+
+        crawl_data = {
+            "site": "https://example.com",
+            "pages": [
+                {
+                    "url": "https://example.com",
+                    "title": "Example Domain",
+                    "meta_description": "Documentation example site.",
+                    "main_text": "This domain is for use in illustrative examples.",
+                }
+            ],
+        }
+
+        # Mock LLM returning hallucinated facts: 'RFC 2606', '1993', 'Internet Assigned Numbers Authority'
+        hallucinated_response = (
+            "SUMMARY: Example Domain was founded in 1993 under RFC 2606 by the Internet Assigned Numbers Authority.\n"
+            "TAKEAWAYS:\n"
+            "- Established in 1993\n"
+            "- Governed under RFC 2606"
+        )
+
+        with patch("app.summarizer.call_llm", return_value=hallucinated_response):
+            summary, takeaways = summarize(crawl_data)
+
+            # Assert ungrounded summary was rejected in favor of extractive summary
+            assert "Example Domain" in summary
+            assert "[Note: LLM summary contained ungrounded claims absent from crawl data" in summary
+            assert "RFC 2606" in summary
+            assert "1993" in summary
+            # Assert takeaways were safely derived from crawl data
+            for t in takeaways:
+                assert "RFC" not in t
+                assert "1993" not in t
+
