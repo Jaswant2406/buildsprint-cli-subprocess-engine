@@ -63,15 +63,25 @@ class TestPostprocess:
         assert "cancelled" in result["status_reason"]
 
     def test_coverage_score_bounds(self) -> None:
-        data = {
+        # Complete 1-page crawl without errors scores near 100
+        complete_1page = {
             "pages": [{"url": "http://a.com"}],
             "errors": [],
             "skipped": [],
         }
-        cov = compute_coverage(data, {"max_pages": 5})
-        assert 0 <= cov.score <= 100
-        assert cov.pages_crawled == 1
-        assert cov.pages_limit == 5
+        cov_complete = compute_coverage(complete_1page, {"max_pages": 10})
+        assert cov_complete.score >= 95
+        assert cov_complete.pages_crawled == 1
+
+        # Partial crawl with errors scores significantly lower
+        partial_with_errors = {
+            "pages": [{"url": "http://a.com"}],
+            "errors": [{"url": "http://a.com/err1", "error": "timeout"}, {"url": "http://a.com/err2", "error": "500"}],
+            "skipped": [{"url": "http://a.com/skip1", "reason": "robots_disallowed"}],
+        }
+        cov_partial = compute_coverage(partial_with_errors, {"max_pages": 10})
+        assert cov_partial.score < cov_complete.score
+        assert cov_partial.score < 50
 
 
 class TestExtractor:

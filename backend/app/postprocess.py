@@ -24,16 +24,22 @@ def compute_coverage(data: dict[str, Any], plan_dict: dict[str, Any]) -> Coverag
         robots_skips = sum(1 for s in skipped if "robots" in s.get("reason", "").lower())
         redirect_blocked = sum(1 for s in skipped if "redirect" in s.get("reason", "").lower())
         total = pages_crawled + len(errors) + len(skipped)
-        error_ratio = len(errors) / max(total, 1)
-        page_ratio = pages_crawled / max(pages_limit, 1)
 
-        score = int(
-            page_ratio * 60
-            + (1 - error_ratio) * 20
-            + max(0, 1 - robots_skips / max(pages_limit, 1)) * 10
-            + 10  # base
-        )
-        score = max(0, min(100, score))
+        if pages_crawled == 0:
+            score = 0
+            error_ratio = 1.0 if total > 0 else 0.0
+        else:
+            error_ratio = len(errors) / max(total, 1)
+            # Complete crawl with zero errors or skips scores near 100
+            if len(errors) == 0 and len(skipped) == 0:
+                score = 100
+            else:
+                success_ratio = pages_crawled / total
+                completeness = min(1.0, pages_crawled / max(pages_limit, 1))
+                penalty = (len(errors) / total) * 35
+                score = int(completeness * 50 + success_ratio * 40 + 10 - penalty)
+                score = max(0, min(100, score))
+
         notes = (
             f"{pages_crawled}/{pages_limit} pages crawled, "
             f"{len(errors)} errors, {robots_skips} robots-skipped, "
