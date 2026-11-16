@@ -46,6 +46,7 @@ try:
         ContentTypeError,
         RedirectError,
         RedirectPolicy,
+        ResponseTooLargeError,
         RobotsError,
         SSRFError,
         policy_get,
@@ -299,7 +300,7 @@ def crawl(
                 _stderr_progress("skipped", url=url, reason=str(e))
             except RedirectError as e:
                 skipped.append({"url": url, "reason": str(e)})
-            except ContentTypeError as e:
+            except (ContentTypeError, ResponseTooLargeError) as e:
                 skipped.append({"url": url, "reason": str(e)})
             except Exception as e:
                 errors.append({"url": url, "error": str(e)[:200]})

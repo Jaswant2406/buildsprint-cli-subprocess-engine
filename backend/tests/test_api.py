@@ -374,3 +374,46 @@ class TestAPIEndpoints:
                 assert "server busy" not in content
                 assert "no_slots" not in content
 
+    def test_bad_or_expired_llm_key_falls_back_honestly_without_crashing(self, app_client: TestClient, local_site: str) -> None:
+        """When an invalid/expired LLM key is configured, chat does NOT crash; it falls back with an honest note."""
+        import json
+        from unittest.mock import patch
+
+        from app.config import Settings
+        from app.llm import LLMError
+
+        mock_settings = Settings(
+            LLM_PROVIDER="openai",
+            LLM_API_KEY="sk-expired-key-12345",
+            APP_ENV="test",
+            ALLOW_LOCALHOST_FOR_TESTS=True,
+        )
+
+        with patch("app.main.get_settings", return_value=mock_settings):
+            with patch("app.intent.get_settings", return_value=mock_settings):
+                with patch("app.config.get_settings", return_value=mock_settings):
+                    with patch("app.intent.call_llm", side_effect=LLMError("OpenAI error 401: Invalid API key")):
+                        with patch("app.summarizer.call_llm", side_effect=LLMError("OpenAI error 401: Invalid API key")):
+                            with app_client.stream(
+                                "POST",
+                                "/api/chat",
+                                json={"prompt": f"Crawl {local_site}/index.html, summarize, and give json"},
+                            ) as resp:
+                                assert resp.status_code == 200
+                                events = []
+                                current_event = ""
+                                for line in resp.iter_lines():
+                                    if line.startswith("event:"):
+                                        current_event = line[6:].strip()
+                                    elif line.startswith("data:"):
+                                        payload = json.loads(line[5:].strip())
+                                        events.append((current_event, payload))
+
+                                event_names = [e[0] for e in events]
+                                assert "result" in event_names
+                                # Find result payload
+                                result_data = next(e[1]["data"] for e in events if e[0] == "result")
+                                assert result_data["status"] in ("SUCCESS", "PARTIAL")
+                                assert "[Note: LLM provider unavailable" in result_data["summary"]
+                                assert "401" in result_data["summary"]
+

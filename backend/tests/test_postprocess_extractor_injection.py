@@ -245,3 +245,32 @@ class TestSummarizer:
         assert _DATA_OPEN in sys_p and _DATA_CLOSE in sys_p
         assert _DATA_OPEN in usr_p and _DATA_CLOSE in usr_p
 
+    def test_llm_summarize_bad_or_expired_key_falls_back_to_heuristic_with_honest_note(self) -> None:
+        """When LLM provider fails (e.g. 401/429), summarizer falls back to extractive mode with honest note."""
+        from unittest.mock import patch
+
+        from app.config import Settings
+        from app.llm import LLMError
+        from app.summarizer import summarize
+
+        mock_settings = Settings(LLM_PROVIDER="anthropic", LLM_API_KEY="sk-ant-expired-123")
+        crawl_data = {
+            "site": "https://example.com",
+            "pages": [
+                {
+                    "url": "https://example.com",
+                    "title": "Example Domain",
+                    "meta_description": "Official example domain for documentation.",
+                    "main_text": "Example domain text for fallback testing.",
+                }
+            ],
+        }
+
+        with patch("app.config.get_settings", return_value=mock_settings):
+            with patch("app.summarizer.call_llm", side_effect=LLMError("Anthropic error 401: Invalid API key")):
+                summary, takeaways = summarize(crawl_data)
+                assert "Example Domain" in summary
+                assert "[Note: LLM provider unavailable" in summary
+                assert "401" in summary
+                assert len(takeaways) >= 1
+

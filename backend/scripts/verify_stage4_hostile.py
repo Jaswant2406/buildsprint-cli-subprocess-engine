@@ -33,9 +33,8 @@ from app.config import get_settings
 from app.injection import scan_crawl_result
 from app.models import Plan
 from app.netpolicy import (
-    _MAX_RESPONSE_SIZE,
-    ContentTypeError,
     RedirectError,
+    ResponseTooLargeError,
     SSRFError,
     clear_robots_cache,
     policy_get,
@@ -44,6 +43,7 @@ from app.runner import get_slot_manager, run_tool
 from app.runstore import RunRecord
 
 _PYTHON = sys.executable
+_GZIP_BOMB_PAYLOAD = gzip.compress(b"0" * (100 * 1024 * 1024))
 
 
 class HostileServerHandler(http.server.BaseHTTPRequestHandler):
@@ -85,14 +85,12 @@ class HostileServerHandler(http.server.BaseHTTPRequestHandler):
 
         # c. Gzip bomb: 100MB of zeros compressed to ~100KB
         if p == "/gzip-bomb":
-            raw = b"0" * (100 * 1024 * 1024)
-            compressed = gzip.compress(raw)
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Encoding", "gzip")
-            self.send_header("Content-Length", str(len(compressed)))
+            self.send_header("Content-Length", str(len(_GZIP_BOMB_PAYLOAD)))
             self.end_headers()
-            self.wfile.write(compressed)
+            self.wfile.write(_GZIP_BOMB_PAYLOAD)
             return
 
         # d. Server that never responds
@@ -183,24 +181,20 @@ def run_hostile_suite() -> int:
     case_c_ok = False
     status_c = "FAIL"
     try:
-        resp = policy_get(f"{base}/gzip-bomb", allow_localhost=True)
+        policy_get(f"{base}/gzip-bomb", allow_localhost=True)
+        status_c = "ALLOWED_EXCESSIVE_BODY"
+    except ResponseTooLargeError as e:
         mem_after = proc.memory_info().rss / (1024 * 1024)
         peak_delta = mem_after - mem_before
-        if len(resp.content) <= _MAX_RESPONSE_SIZE and peak_delta < 50.0:
+        if peak_delta < 10.0:
             case_c_ok = True
-            status_c = f"PASS (size={len(resp.content)} bytes <= 1MB, peak mem delta={peak_delta:.2f} MB)"
+            status_c = f"PASS (caught ResponseTooLargeError: {e}, peak mem delta={peak_delta:.2f} MB < 10MB)"
         else:
-            status_c = f"SIZE_OR_MEM_EXCEEDED (size={len(resp.content)}, delta={peak_delta:.2f} MB)"
-    except ContentTypeError as e:
-        mem_after = proc.memory_info().rss / (1024 * 1024)
-        peak_delta = mem_after - mem_before
-        case_c_ok = True
-        status_c = f"PASS (caught ContentTypeError: {e}, peak mem delta={peak_delta:.2f} MB)"
+            status_c = f"MEM_EXCEEDED (caught ResponseTooLargeError, peak mem delta={peak_delta:.2f} MB >= 10MB)"
     except Exception as e:
         mem_after = proc.memory_info().rss / (1024 * 1024)
         peak_delta = mem_after - mem_before
-        case_c_ok = True
-        status_c = f"PASS (safely handled {type(e).__name__}, peak mem delta={peak_delta:.2f} MB)"
+        status_c = f"WRONG_EXCEPTION ({type(e).__name__}: {e}, peak mem delta={peak_delta:.2f} MB)"
 
     if not case_c_ok:
         failed += 1

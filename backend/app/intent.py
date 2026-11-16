@@ -63,8 +63,10 @@ def parse_intent(prompt: str) -> Plan:
             plan = _parse_llm_response(raw)
             if plan is not None:
                 return plan
-        except (LLMError, Exception):
-            pass  # Fall through to heuristic
+        except (LLMError, Exception) as e:
+            plan = _heuristic_parse(prompt)
+            plan.tool_reason = f"{plan.tool_reason} [Note: LLM provider unavailable ({e}); fell back to heuristic mode]"
+            return plan
 
     return _heuristic_parse(prompt)
 

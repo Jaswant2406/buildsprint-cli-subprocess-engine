@@ -12,11 +12,13 @@ import socket
 import ssl
 import urllib.parse
 import urllib.robotparser
+import zlib
 from dataclasses import dataclass, field
 from typing import Iterable
 
 import httpcore
 import httpx
+from httpx._transports.default import ResponseStream, map_httpcore_exceptions
 
 # ---------------------------------------------------------------------------
 # SSL helper
@@ -78,6 +80,10 @@ class RobotsError(NetworkPolicyError):
 
 
 class ContentTypeError(NetworkPolicyError):
+    pass
+
+
+class ResponseTooLargeError(NetworkPolicyError):
     pass
 
 
@@ -297,28 +303,33 @@ class PinnedTransport(httpx.BaseTransport):
             _resolve_and_validate(host, allow_localhost=self._allow_localhost)
 
         # Build httpcore request
+        ext = dict(request.extensions)
+        ext["server_hostname"] = host.encode()
         core_request = httpcore.Request(
             method=request.method,
-            url=str(request.url),
+            url=httpcore.URL(
+                scheme=request.url.raw_scheme,
+                host=request.url.raw_host,
+                port=request.url.port,
+                target=request.url.raw_path,
+            ),
             headers=list(request.headers.raw),
             content=request.stream,
-            extensions={"server_hostname": host.encode()},
+            extensions=ext,
         )
-        with self._pool as pool:
-            core_response = pool.handle_request(core_request)
-            # Collect the full response body
-            content = b"".join(iter(core_response.stream))  # type: ignore[arg-type]
-            if len(content) > _MAX_RESPONSE_SIZE:
-                content = content[:_MAX_RESPONSE_SIZE]
+        with map_httpcore_exceptions():
+            core_response = self._pool.handle_request(core_request)
 
+        headers = [
+            (k.decode() if isinstance(k, bytes) else k,
+             v.decode() if isinstance(v, bytes) else v)
+            for k, v in core_response.headers
+        ]
         return httpx.Response(
             status_code=core_response.status,
-            headers=[
-                (k.decode() if isinstance(k, bytes) else k,
-                 v.decode() if isinstance(v, bytes) else v)
-                for k, v in core_response.headers
-            ],
-            content=content,
+            headers=headers,
+            stream=ResponseStream(core_response.stream),  # type: ignore[arg-type]
+            extensions=core_response.extensions,
             request=request,
         )
 
@@ -421,6 +432,57 @@ def _build_client(
     )
 
 
+def _stream_and_decompress(
+    resp: httpx.Response,
+    max_decompressed_bytes: int = _MAX_RESPONSE_SIZE,
+) -> bytes:
+    """
+    Stream and incrementally decompress response body, aborting immediately
+    if decompressed bytes exceed max_decompressed_bytes.
+    Never inflates a body larger than the limit into memory.
+    """
+    content_encoding = resp.headers.get("content-encoding", "").lower()
+    total = 0
+    chunks: list[bytes] = []
+
+    if "gzip" in content_encoding or "deflate" in content_encoding:
+        decompressor = zlib.decompressobj(32 + zlib.MAX_WBITS)
+        for raw in resp.iter_raw(chunk_size=65536):
+            if not raw:
+                continue
+            to_read = raw
+            while to_read:
+                allowed = max_decompressed_bytes - total + 1
+                out = decompressor.decompress(to_read, allowed)
+                total += len(out)
+                if total > max_decompressed_bytes:
+                    raise ResponseTooLargeError(
+                        f"Decompressed response body exceeds {max_decompressed_bytes} byte limit"
+                    )
+                chunks.append(out)
+                to_read = decompressor.unconsumed_tail
+
+        remaining = decompressor.flush(max_decompressed_bytes - total + 1)
+        total += len(remaining)
+        if total > max_decompressed_bytes:
+            raise ResponseTooLargeError(
+                f"Decompressed response body exceeds {max_decompressed_bytes} byte limit"
+            )
+        chunks.append(remaining)
+    else:
+        for raw in resp.iter_raw(chunk_size=65536):
+            if not raw:
+                continue
+            total += len(raw)
+            if total > max_decompressed_bytes:
+                raise ResponseTooLargeError(
+                    f"Response body exceeds {max_decompressed_bytes} byte limit"
+                )
+            chunks.append(raw)
+
+    return b"".join(chunks)
+
+
 def _raw_get(
     client: httpx.Client,
     url: str,
@@ -437,19 +499,29 @@ def _raw_get(
     if check_robots and not _is_robots_allowed(url, allow_localhost=allow_localhost, user_agent=user_agent):
         raise RobotsError(f"robots.txt disallows {url!r}")
 
-    resp = client.request("GET", url)
-    ct = resp.headers.get("content-type", "")
-    if resp.status_code < 300:
+    req = client.build_request("GET", url)
+    resp = client.send(req, stream=True)
+    try:
+        if resp.status_code >= 300:
+            resp.read()
+            return resp
+
+        ct = resp.headers.get("content-type", "")
         # Allow text/* and application/json; skip binary content
         if ct and not any(t in ct for t in (
             "text/html", "application/xhtml+xml", "text/plain",
             "application/json", "text/",
         )):
             if not ct.startswith("text/"):
+                resp.close()
                 return None
-        if len(resp.content) > _MAX_RESPONSE_SIZE:
-            raise ContentTypeError("Response exceeds 1MB cap")
-    return resp
+
+        content = _stream_and_decompress(resp, max_decompressed_bytes=_MAX_RESPONSE_SIZE)
+        resp._content = content
+        return resp
+    except Exception:
+        resp.close()
+        raise
 
 
 def policy_get(

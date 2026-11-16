@@ -40,8 +40,9 @@ def compute_coverage(data: dict[str, Any], plan_dict: dict[str, Any]) -> Coverag
                 score = int(completeness * 50 + success_ratio * 40 + 10 - penalty)
                 score = max(0, min(100, score))
 
+        discoverable_pages = max(total, pages_crawled)
         notes = (
-            f"{pages_crawled}/{pages_limit} pages crawled, "
+            f"{pages_crawled} of {discoverable_pages} discoverable pages crawled, "
             f"{len(errors)} errors, {robots_skips} robots-skipped, "
             f"{redirect_blocked} redirects-blocked"
         )

@@ -6,9 +6,16 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings  # type: ignore[import-untyped]
 
+_ROOT = Path(__file__).resolve().parent.parent.parent
+_BACKEND = Path(__file__).resolve().parent.parent
+
 
 class Settings(BaseSettings):
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    model_config = {
+        "env_file": [str(_ROOT / ".env"), str(_BACKEND / ".env"), ".env"],
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
     # App
     app_env: str = Field(default="production", alias="APP_ENV")
@@ -68,8 +75,8 @@ class Settings(BaseSettings):
 _settings: Settings | None = None
 
 
-def get_settings() -> Settings:
+def get_settings(reload: bool = False) -> Settings:
     global _settings
-    if _settings is None:
+    if _settings is None or reload:
         _settings = Settings()
     return _settings

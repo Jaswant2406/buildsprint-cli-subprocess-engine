@@ -1,8 +1,12 @@
 """Tests for intent parsing and tool selection."""
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
+from app.config import Settings
 from app.intent import parse_intent
+from app.llm import LLMError
 from app.validators import ValidationError
 
 
@@ -42,3 +46,30 @@ class TestIntentParser:
         with pytest.raises(ValidationError) as exc:
             parse_intent("Please crawl the website and find all contacts")
         assert exc.value.reason == "missing_url"
+
+    def test_llm_mode_success_parses_plan(self) -> None:
+        """When LLM is configured and succeeds, intent is parsed from LLM JSON response."""
+        mock_settings = Settings(LLM_PROVIDER="openai", LLM_API_KEY="sk-valid-key")
+        llm_json = (
+            '{"task_type": "crawl", "tool": "site_crawler", '
+            '"tool_reason": "LLM selected site_crawler for comprehensive coverage", '
+            '"url": "https://example.com", "max_pages": 5, "max_depth": 2, '
+            '"wants_summary": true, "wants_json": true, "extract_focus": "", "max_links": 25}'
+        )
+        with patch("app.intent.get_settings", return_value=mock_settings):
+            with patch("app.intent.call_llm", return_value=llm_json):
+                plan = parse_intent("Crawl https://example.com and summarize")
+                assert plan.tool == "site_crawler"
+                assert plan.url == "https://example.com"
+                assert "LLM selected site_crawler" in plan.tool_reason
+
+    def test_bad_or_expired_key_falls_back_to_heuristic_with_honest_note(self) -> None:
+        """When LLM provider fails (e.g. 401 expired key), falls back to heuristic with honest note."""
+        mock_settings = Settings(LLM_PROVIDER="openai", LLM_API_KEY="sk-expired-key")
+        with patch("app.intent.get_settings", return_value=mock_settings):
+            with patch("app.intent.call_llm", side_effect=LLMError("OpenAI error 401: Invalid API key")):
+                plan = parse_intent("Crawl https://example.com and summarize")
+                assert plan.tool == "site_crawler"
+                assert plan.url == "https://example.com"
+                assert "Note: LLM provider unavailable" in plan.tool_reason
+                assert "401" in plan.tool_reason

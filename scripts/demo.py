@@ -61,7 +61,7 @@ def run_via_server() -> bool:
                             if data_obj.get("event") == "spawned":
                                 print(f"-> spawned PID {data.get('pid')} (tool={data.get('tool')})")
                             elif data_obj.get("event") == "plan":
-                                print(f"-> tool={data.get('tool')}, max_pages={data.get('max_pages')}")
+                                print(f"-> tool={data.get('tool')}, max_pages={data.get('max_pages')}, reason=\"{data.get('tool_reason')}\"")
                             elif data_obj.get("event") == "progress":
                                 print(f"-> {data.get('event')} ({data.get('url', '')})")
                             elif data_obj.get("event") == "result":

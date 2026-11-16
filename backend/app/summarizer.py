@@ -51,7 +51,13 @@ def summarize(crawl_data: dict[str, Any]) -> tuple[str, list[str]]:
         return _llm_summarize(page_texts, crawl_data)
     except (LLMError, Exception) as e:
         logger.info(f"LLM summarize failed ({e}), using heuristic")
-        return _heuristic_summarize(crawl_data)
+        summary, takeaways = _heuristic_summarize(crawl_data)
+        from app.config import get_settings
+        settings = get_settings()
+        if settings.llm_mode == "llm":
+            note = f"[Note: LLM provider unavailable ({e}); fell back to extractive heuristic mode]"
+            summary = f"{summary}\n\n{note}" if summary else note
+        return summary, takeaways
 
 
 def _build_page_texts(crawl_data: dict[str, Any]) -> str:

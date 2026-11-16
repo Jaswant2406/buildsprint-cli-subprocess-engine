@@ -11,6 +11,7 @@ from app.netpolicy import (
     IPPinningError,
     RedirectError,
     RedirectPolicy,
+    ResponseTooLargeError,
     RobotsError,
     SSRFError,
     _PinnedNetworkBackend,
@@ -152,3 +153,50 @@ class TestRedirectsAndRobots:
     def test_1mb_response_cap_enforced(self) -> None:
         from app.netpolicy import _MAX_RESPONSE_SIZE
         assert _MAX_RESPONSE_SIZE == 1_048_576
+
+    def test_gzip_bomb_cap_enforced_during_streaming_not_after_full_decompression(self) -> None:
+        """Streaming decompressor must abort on decompressed byte limit, never inflating full body."""
+        import gzip
+        import tracemalloc
+
+        import httpx
+        from app.netpolicy import _stream_and_decompress
+
+        # Create 100MB of uncompressed zeros, compressed to ~100KB
+        inflated_size = 100 * 1024 * 1024
+        compressed = gzip.compress(b"0" * inflated_size)
+        assert len(compressed) < 200_000
+
+        # Split into 10 chunks to verify early stream termination
+        chunk_size = len(compressed) // 10
+        raw_chunks = [compressed[i:i + chunk_size] for i in range(0, len(compressed), chunk_size)]
+        chunks_consumed = 0
+
+        def stream_gen():
+            nonlocal chunks_consumed
+            for chk in raw_chunks:
+                chunks_consumed += 1
+                yield chk
+
+        resp = httpx.Response(
+            status_code=200,
+            headers={"content-type": "text/html", "content-encoding": "gzip"},
+            stream=httpx.ByteStream(b"".join(raw_chunks)),
+        )
+        # Wrap iter_raw to count consumed chunks
+        original_iter = stream_gen()
+        resp.iter_raw = lambda chunk_size=None: original_iter  # type: ignore[method-assign]
+
+        tracemalloc.start()
+        try:
+            with pytest.raises(ResponseTooLargeError) as exc_info:
+                _stream_and_decompress(resp, max_decompressed_bytes=1_048_576)
+
+            assert "exceeds 1048576 byte limit" in str(exc_info.value)
+            # Must abort early: never consume all 10 chunks from the socket
+            assert chunks_consumed < len(raw_chunks), f"Consumed {chunks_consumed} of {len(raw_chunks)} chunks; did not abort early!"
+            # Peak memory must remain well under 10MB (never inflating the 100MB body)
+            _, peak = tracemalloc.get_traced_memory()
+            assert peak < 10 * 1024 * 1024, f"Peak memory {peak / 1024 / 1024:.2f}MB exceeded 10MB! Full decompression occurred."
+        finally:
+            tracemalloc.stop()
