@@ -83,6 +83,30 @@ class TestSiteCrawlerCLI:
         assert len(data["pages"]) == 1
         assert data["pages"][0]["url"] == f"{local_site}/index.html"
 
+    def test_canonical_url_duplicate_detection(self) -> None:
+        """Verify duplicate canonical URLs are normalized and distinct categories preserved."""
+        import sys
+        sys.path.insert(0, str(_CLI_DIR))
+        from site_crawler import _canonical_url
+
+        # Root page, /index.html and books_1 category page map to identical root canonical
+        root = "https://books.toscrape.com/"
+        index = "https://books.toscrape.com/index.html"
+        books_cat = "https://books.toscrape.com/catalogue/category/books_1/index.html"
+
+        assert _canonical_url(root) == "https://books.toscrape.com/"
+        assert _canonical_url(index) == "https://books.toscrape.com/"
+        assert _canonical_url(books_cat) == "https://books.toscrape.com/"
+
+        # Valid distinct category pages are preserved
+        travel = "https://books.toscrape.com/catalogue/category/books/travel_2/index.html"
+        mystery = "https://books.toscrape.com/catalogue/category/books/mystery_3/index.html"
+
+        assert _canonical_url(travel) == "https://books.toscrape.com/catalogue/category/books/travel_2/"
+        assert _canonical_url(mystery) == "https://books.toscrape.com/catalogue/category/books/mystery_3/"
+        assert _canonical_url(travel) != _canonical_url(root)
+        assert _canonical_url(travel) != _canonical_url(mystery)
+
 
 class TestLinkCheckerCLI:
     def test_version_and_help(self) -> None:

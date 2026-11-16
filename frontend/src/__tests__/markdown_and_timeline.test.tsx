@@ -1,6 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { App } from '../App';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { ExecutionTimeline } from '../components/ExecutionTimeline';
 import { MarkdownView } from '../components/MarkdownView';
@@ -404,7 +405,12 @@ describe('Timeline DNS Failure & Step States', () => {
     expect(container.querySelector('input[placeholder*="Ask a question"]')).toBeNull();
   });
 
-  it('verifies that the Refresh button is removed from Navbar UI', async () => {
+  it('verifies that the Refresh button is rendered near Runs heading with icon, label, and functional states', async () => {
+    let refreshCalls = 0;
+    const handleRefresh = () => {
+      refreshCalls += 1;
+    };
+
     const root = createRoot(container);
     await act(async () => {
       root.render(
@@ -412,19 +418,68 @@ describe('Timeline DNS Failure & Step States', () => {
           health={{ status: 'ok', version: '1.0.0', llm_mode: 'heuristic' }}
           audit={{ verified: true, records: [] }}
           backendOnline={true}
-          isSidebarOpen={false}
           onToggleSidebar={() => {}}
-          onRefreshHistory={() => {}}
+          onRefreshHistory={handleRefresh}
+          isRefreshing={false}
+          refreshSuccess={false}
         />
       );
     });
 
-    // Ensure no Refresh button, icon, or label is rendered
-    expect(container.textContent).not.toContain('Refresh');
-    expect(container.textContent).not.toContain('↻');
+    // 1. Verify Refresh button exists near Runs
     const buttons = Array.from(container.querySelectorAll('button'));
-    const refreshBtn = buttons.find((b) => b.textContent?.includes('Refresh') || b.title?.includes('Refresh'));
-    expect(refreshBtn).toBeUndefined();
+    const runsBtn = buttons.find((b) => b.textContent?.includes('Runs'));
+    expect(runsBtn).toBeDefined();
+
+    const refreshBtn = buttons.find((b) => b.textContent?.includes('Refresh'));
+    expect(refreshBtn).toBeDefined();
+    expect(refreshBtn?.textContent).toContain('↻');
+    expect(refreshBtn?.textContent).toContain('Refresh');
+    expect(refreshBtn?.disabled).toBe(false);
+
+    // 2. Click calls onRefreshHistory
+    await act(async () => {
+      refreshBtn?.click();
+    });
+    expect(refreshCalls).toBe(1);
+
+    // 3. Test isRefreshing=true: button is disabled and displays spinner/Refreshing...
+    await act(async () => {
+      root.render(
+        <Navbar
+          health={{ status: 'ok', version: '1.0.0', llm_mode: 'heuristic' }}
+          audit={{ verified: true, records: [] }}
+          backendOnline={true}
+          onToggleSidebar={() => {}}
+          onRefreshHistory={handleRefresh}
+          isRefreshing={true}
+          refreshSuccess={false}
+        />
+      );
+    });
+    const refreshingBtn = container.querySelector('button[aria-label="Refresh application data"]') as HTMLButtonElement;
+    expect(refreshingBtn).not.toBeNull();
+    expect(refreshingBtn.disabled).toBe(true);
+    expect(refreshingBtn.textContent).toContain('Refreshing...');
+
+    // 4. Test refreshSuccess=true: shows checkmark and Refreshed label
+    await act(async () => {
+      root.render(
+        <Navbar
+          health={{ status: 'ok', version: '1.0.0', llm_mode: 'heuristic' }}
+          audit={{ verified: true, records: [] }}
+          backendOnline={true}
+          onToggleSidebar={() => {}}
+          onRefreshHistory={handleRefresh}
+          isRefreshing={false}
+          refreshSuccess={true}
+        />
+      );
+    });
+    const successBtn = container.querySelector('button[aria-label="Refresh application data"]') as HTMLButtonElement;
+    expect(successBtn).not.toBeNull();
+    expect(successBtn.textContent).toContain('✓');
+    expect(successBtn.textContent).toContain('Refreshed');
   });
 
   it('verifies Coverage Score card alignment, single-line 100%, and readable supporting text', async () => {
@@ -556,5 +611,153 @@ describe('Timeline DNS Failure & Step States', () => {
     expect(timelineText).not.toContain('1 of 10 discoverable pages');
     // Must accurately state 1 of 1 discovered page with limit
     expect(timelineText).toContain('Crawled 1 of 1 discovered page (limit: 10)');
+  });
+
+  it('displays separate page-limit utilization and discovered-page crawl ratio for 5 of 105 crawl without claiming 100% coverage', async () => {
+    const mockResult: ChatResult = {
+      run_id: 'test-books-5-of-105',
+      status: 'SUCCESS',
+      status_reason: '5 pages crawled',
+      coverage_score: 5,
+      coverage: {
+        score: 5,
+        pages_crawled: 5,
+        pages_discovered: 105,
+        pages_limit: 5,
+        page_limit_utilization: 100,
+        discovered_ratio: 4.76,
+        coverage_established: false,
+        notes:
+          '5 of 105 discovered pages crawled (limit: 5), Page limit utilization: 5/5 = 100%, Discovered-page crawl ratio: 5/105 = 4.76%, 0 errors, 0 robots-skipped, 0 redirects-blocked, coverage not fully established',
+      },
+      json: {
+        site: 'https://books.toscrape.com/',
+        pages: Array.from({ length: 5 }, (_, i) => ({ url: `https://books.toscrape.com/page${i + 1}` })),
+        stats: { pages_crawled: 5, pages_discovered: 105, pages_limit: 5 },
+      },
+      plan: {
+        task_type: 'crawl',
+        tool: 'site_crawler',
+        tool_reason: 'Crawl target',
+        url: 'https://books.toscrape.com/',
+        max_pages: 5,
+        max_depth: 2,
+        wants_summary: true,
+        wants_json: true,
+      },
+    };
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <ResultCard
+          result={mockResult}
+          onOpenLogs={() => {}}
+          onReplay={() => {}}
+        />
+      );
+    });
+
+    const card = container.querySelector('[data-testid="coverage-score-card"]');
+    expect(card).not.toBeNull();
+
+    // 1. Must NOT display 100% as the coverage score headline
+    const headline = card?.querySelector('.tabular-num');
+    expect(headline?.textContent).toBe('4.76%');
+
+    // 2. Must explicitly display page limit utilization: 5/5 = 100%
+    expect(card?.textContent).toContain('Page limit utilization: 5/5 = 100%');
+
+    // 3. Must explicitly display discovered-page crawl ratio: 5/105 = 4.76%
+    expect(card?.textContent).toContain('Discovered-page crawl ratio: 5/105 = 4.76%');
+
+    // 4. Do NOT claim full website coverage
+    expect(card?.textContent).not.toContain('100% Full Website Coverage');
+  });
+
+  it('handles Refresh in App when backend is online and offline without triggering crawl subprocess', async () => {
+    let healthFetched = 0;
+    let runsFetched = 0;
+    let auditFetched = 0;
+    let postTriggered = 0;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const urlStr = String(url);
+      if (init?.method === 'POST') {
+        postTriggered += 1;
+      }
+      if (urlStr.includes('/health')) {
+        healthFetched += 1;
+        return {
+          ok: true,
+          json: async () => ({ status: 'ok', version: '1.0.0', llm_mode: 'heuristic' }),
+        } as Response;
+      }
+      if (urlStr.includes('/api/runs')) {
+        runsFetched += 1;
+        return {
+          ok: true,
+          json: async () => [
+            {
+              run_id: 'run-123',
+              task_type: 'crawl',
+              url: 'https://example.com',
+              status: 'SUCCESS',
+              created_at: 1000,
+              pages_crawled: 1,
+            },
+          ],
+        } as Response;
+      }
+      if (urlStr.includes('/api/audit')) {
+        auditFetched += 1;
+        return {
+          ok: true,
+          json: async () => ({ verified: true, count: 1, records: [] }),
+        } as Response;
+      }
+      if (urlStr.includes('/api/tools')) {
+        return {
+          ok: true,
+          json: async () => [],
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({}),
+      } as Response;
+    }) as any;
+
+    try {
+      const root = createRoot(container);
+      await act(async () => {
+        root.render(<App />);
+      });
+
+      // Initial load
+      expect(healthFetched).toBeGreaterThanOrEqual(1);
+      expect(runsFetched).toBeGreaterThanOrEqual(1);
+      const preClickHealth = healthFetched;
+      const preClickRuns = runsFetched;
+
+      // Click Refresh button
+      const refreshBtn = container.querySelector('button[aria-label="Refresh application data"]') as HTMLButtonElement;
+      expect(refreshBtn).not.toBeNull();
+      expect(refreshBtn.disabled).toBe(false);
+
+      await act(async () => {
+        refreshBtn.click();
+      });
+
+      // Verify data refreshed
+      expect(healthFetched).toBeGreaterThan(preClickHealth);
+      expect(runsFetched).toBeGreaterThan(preClickRuns);
+
+      // Verify ZERO subprocess/crawls triggered (zero POST requests)
+      expect(postTriggered).toBe(0);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

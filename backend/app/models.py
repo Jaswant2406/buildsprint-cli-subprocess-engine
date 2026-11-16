@@ -116,7 +116,9 @@ class CoverageBreakdown(BaseModel):
     pages_crawled: int = 0
     pages_discovered: int = 0
     pages_limit: int = 0
-    coverage_established: bool = True
+    page_limit_utilization: float = 0.0
+    discovered_ratio: float = 0.0
+    coverage_established: bool = False
     error_ratio: float = 0.0
     robots_skips: int = 0
     redirects_blocked: int = 0

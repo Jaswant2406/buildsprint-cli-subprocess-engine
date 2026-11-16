@@ -303,3 +303,12 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-
   gap: 12px;
   min-width: 0;
 }
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

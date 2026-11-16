@@ -7,8 +7,10 @@ interface NavbarProps {
   audit: AuditChain | null;
   backendOnline: boolean;
   onToggleSidebar: () => void;
-  onRefreshHistory?: () => void;
+  onRefreshHistory?: () => Promise<void> | void;
   onNavigateHome?: () => void;
+  isRefreshing?: boolean;
+  refreshSuccess?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -16,8 +18,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   audit,
   backendOnline,
   onToggleSidebar,
-  onRefreshHistory: _onRefreshHistory,
+  onRefreshHistory,
   onNavigateHome,
+  isRefreshing = false,
+  refreshSuccess = false,
 }) => {
   return (
     <header
@@ -35,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         minWidth: 0,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', minWidth: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flexWrap: 'wrap' }}>
         <button
           onClick={onToggleSidebar}
           aria-label="Toggle Run History Sidebar"
@@ -43,16 +47,57 @@ export const Navbar: React.FC<NavbarProps> = ({
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '8px 12px',
+            padding: '7px 12px',
             backgroundColor: 'transparent',
             border: '1px solid var(--hairline)',
             borderRadius: '6px',
             color: 'var(--ink)',
             cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
           }}
         >
-          <span style={{ fontSize: '16px', marginRight: '6px' }}>☰</span> Runs
+          <span style={{ fontSize: '15px', marginRight: '6px' }}>☰</span> Runs
         </button>
+
+        {onRefreshHistory && (
+          <button
+            type="button"
+            onClick={onRefreshHistory}
+            disabled={isRefreshing}
+            aria-label="Refresh application data"
+            title="Refresh backend status, run history, and audit chain"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '7px 12px',
+              backgroundColor: refreshSuccess ? 'var(--status-success-bg)' : 'var(--page)',
+              border: `1px solid ${refreshSuccess ? 'var(--status-success-text)' : 'var(--hairline)'}`,
+              borderRadius: '6px',
+              color: refreshSuccess ? 'var(--status-success-text)' : 'var(--navy)',
+              cursor: isRefreshing ? 'not-allowed' : 'pointer',
+              fontSize: '13px',
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+              opacity: isRefreshing ? 0.7 : 1,
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                fontSize: '14px',
+                animation: isRefreshing ? 'spin 0.8s linear infinite' : 'none',
+              }}
+            >
+              {refreshSuccess ? '✓' : '↻'}
+            </span>
+            <span>{isRefreshing ? 'Refreshing...' : refreshSuccess ? 'Refreshed' : 'Refresh'}</span>
+          </button>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

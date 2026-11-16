@@ -31,7 +31,20 @@ def compute_coverage(data: dict[str, Any], plan_dict: dict[str, Any]) -> Coverag
         else:
             pages_discovered = max(total, pages_crawled, 1 if pages_crawled > 0 else 0)
 
-        coverage_established = pages_crawled > 1
+        # Separate page-limit utilization from discovered-page crawl ratio
+        limit_utilization = round((pages_crawled / max(pages_limit, 1)) * 100, 2)
+        discovered_ratio = round((pages_crawled / max(pages_discovered, 1)) * 100, 2)
+
+        # Full website coverage is ONLY established if:
+        # - multiple pages were crawled (pages_crawled > 1)
+        # - all discovered pages were crawled (pages_crawled >= pages_discovered)
+        # - 0 errors and 0 skipped
+        coverage_established = (
+            pages_crawled > 1
+            and pages_crawled >= pages_discovered
+            and len(errors) == 0
+            and len(skipped) == 0
+        )
 
         if pages_crawled == 0:
             score = 0
@@ -39,28 +52,41 @@ def compute_coverage(data: dict[str, Any], plan_dict: dict[str, Any]) -> Coverag
             coverage_established = False
         else:
             error_ratio = len(errors) / max(total, 1)
-            # Complete crawl with zero errors or skips scores near 100
+            # Complete crawl with zero errors or skips
             if len(errors) == 0 and len(skipped) == 0:
-                score = 100
+                if pages_crawled >= pages_discovered:
+                    score = 100
+                else:
+                    # Partial crawl of discovered pages: score represents the percentage of discovered pages crawled
+                    score = max(0, min(100, int(round(discovered_ratio))))
             else:
-                success_ratio = pages_crawled / total
-                completeness = min(1.0, pages_crawled / max(pages_limit, 1))
                 penalty = (len(errors) / total) * 35
-                score = int(completeness * 50 + success_ratio * 40 + 10 - penalty)
-                score = max(0, min(100, score))
+                base = discovered_ratio if pages_discovered > pages_crawled else (pages_crawled / total) * 100
+                score = max(0, min(100, int(base - penalty)))
+
+        util_fmt = f"{limit_utilization:.0f}%" if limit_utilization.is_integer() else f"{limit_utilization:.2f}%"
+        ratio_fmt = (
+            f"{discovered_ratio:.0f}%"
+            if (discovered_ratio.is_integer() and pages_crawled == pages_discovered)
+            else f"{discovered_ratio:.2f}%"
+        )
 
         disc_str = f"{pages_crawled} of {pages_discovered} discovered page{'s' if pages_discovered != 1 else ''} crawled (limit: {pages_limit})"
+        metrics_str = f"Page limit utilization: {pages_crawled}/{pages_limit} = {util_fmt}, Discovered-page crawl ratio: {pages_crawled}/{pages_discovered} = {ratio_fmt}"
         skip_str = f"{len(errors)} errors, {robots_skips} robots-skipped, {redirect_blocked} redirects-blocked"
+
         if not coverage_established:
-            notes = f"{disc_str}, {skip_str}, coverage not fully established"
+            notes = f"{disc_str}, {metrics_str}, {skip_str}, coverage not fully established"
         else:
-            notes = f"{disc_str}, {skip_str}"
+            notes = f"{disc_str}, {metrics_str}, {skip_str}"
 
         return CoverageBreakdown(
             score=score,
             pages_crawled=pages_crawled,
             pages_discovered=pages_discovered,
             pages_limit=pages_limit,
+            page_limit_utilization=limit_utilization,
+            discovered_ratio=discovered_ratio,
             coverage_established=coverage_established,
             error_ratio=round(error_ratio, 3),
             robots_skips=robots_skips,
@@ -79,12 +105,16 @@ def compute_coverage(data: dict[str, Any], plan_dict: dict[str, Any]) -> Coverag
         score = int(ratio * 90 + 10)
         score = max(0, min(100, score))
         notes = f"{working}/{checked} links working, {broken} broken"
+        limit_utilization = round((checked / max(pages_limit, 1)) * 100, 2)
+        discovered_ratio = round((checked / max(total, 1)) * 100, 2)
         return CoverageBreakdown(
             score=score,
             pages_crawled=checked,
             pages_discovered=total,
             pages_limit=pages_limit,
-            coverage_established=checked > 0,
+            page_limit_utilization=limit_utilization,
+            discovered_ratio=discovered_ratio,
+            coverage_established=checked > 0 and broken == 0,
             error_ratio=round(1 - ratio, 3),
             notes=notes,
         )

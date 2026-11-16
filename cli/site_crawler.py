@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
@@ -236,6 +237,17 @@ def _extract_page_data(url: str, html: str) -> dict[str, Any]:
         if content:
             tech_hints.append(content)
 
+    # Canonical link from HTML tag if available
+    canonical_tag = soup.find("link", rel=lambda r: r and "canonical" in (r if isinstance(r, list) else [r]))
+    canonical_url = ""
+    if canonical_tag and hasattr(canonical_tag, "get"):
+        c_href = str(canonical_tag.get("href", "") or "").strip()
+        if c_href:
+            abs_c = urllib.parse.urljoin(url, c_href)
+            norm_c = _canonical_url(abs_c)
+            if norm_c:
+                canonical_url = norm_c
+
     return {
         "url": url,
         "title": title,
@@ -250,6 +262,7 @@ def _extract_page_data(url: str, html: str) -> dict[str, Any]:
         "phones": phones,
         "social_links": social,
         "tech_hints": list(set(tech_hints)),
+        "canonical_url": canonical_url or _canonical_url(url) or url,
         "_links": links,  # used for BFS, not in output
     }
 
@@ -273,11 +286,16 @@ def crawl(
     skipped: list[dict[str, str]] = []
     errors: list[dict[str, str]] = []
     visited: set[str] = set()
+    canonical_visited: set[str] = set()
+    crawled_canonicals: set[str] = set()
+
+    canonical_start = _canonical_url(start_url) or start_url
+    canonical_visited.add(canonical_start)
+    visited.add(start_url)
+    visited.add(canonical_start)
 
     # BFS queue: (url, depth)
-    queue: deque[tuple[str, int]] = deque()
-    queue.append((start_url, 0))
-    visited.add(start_url)
+    queue: deque[tuple[str, int]] = deque([(start_url, 0)])
 
     # Check starting URL robots
     if not allow_localhost or not _is_allowed_localhost(start_url):
@@ -307,6 +325,11 @@ def crawl(
     try:
         while queue and len(pages) < max_pages:
             url, depth = queue.popleft()
+            canonical_current = _canonical_url(url) or url
+
+            # Avoid crawling the same canonical page repeatedly
+            if canonical_current in crawled_canonicals:
+                continue
 
             # Emit progress
             _stderr_progress("crawling", url=url, depth=depth, pages_so_far=len(pages))
@@ -337,19 +360,37 @@ def crawl(
                     continue
 
                 data = _extract_page_data(url, resp.text)
+                page_canonical = data.get("canonical_url") or canonical_current
 
-                page_record = {k: v for k, v in data.items() if k != "_links"}
+                # Avoid duplicate canonical pages
+                if page_canonical in crawled_canonicals:
+                    continue
+
+                crawled_canonicals.add(page_canonical)
+                crawled_canonicals.add(canonical_current)
+
+                page_record = {k: v for k, v in data.items() if k not in ("_links", "canonical_url")}
                 page_record["status_code"] = status_code
                 pages.append(page_record)
 
                 # Enqueue same-domain links
                 if depth < max_depth:
                     for link in data.get("_links", []):
-                        normalized = _normalize_url(link)
-                        if normalized and normalized not in visited:
-                            if _same_domain(normalized, base_netloc):
-                                visited.add(normalized)
-                                queue.append((normalized, depth + 1))
+                        norm_link = _normalize_url(link)
+                        canonical_link = _canonical_url(link)
+                        if not norm_link or not canonical_link:
+                            continue
+
+                        visited.add(norm_link)
+                        visited.add(canonical_link)
+
+                        # Detect duplicate canonical URLs before adding to crawl queue
+                        if canonical_link in canonical_visited or canonical_link in crawled_canonicals:
+                            continue
+
+                        if _same_domain(canonical_link, base_netloc):
+                            canonical_visited.add(canonical_link)
+                            queue.append((canonical_link, depth + 1))
 
                 time.sleep(POLITE_DELAY)
 
@@ -395,6 +436,55 @@ def _normalize_url(url: str) -> str | None:
             return None
         # Strip fragment
         clean = urllib.parse.urlunparse(parsed._replace(fragment=""))
+        return clean
+    except Exception:
+        return None
+
+
+def _canonical_url(url: str) -> str | None:
+    """Normalize URL to its canonical form to detect and avoid duplicate pages.
+
+    - Strips fragment
+    - Normalizes scheme and host to lowercase
+    - Normalizes empty path to '/'
+    - Strips directory index filenames (/index.html, /index.htm, /index.php, /default.html)
+    - Normalizes root/index variants: e.g. https://site.com/index.html -> https://site.com/
+    - Maps top-level all-products category mirroring the root catalog
+      (e.g. /catalogue/category/books_1/ or /category/books_1/ on books.toscrape.com)
+      to the root URL to avoid crawling identical catalog content repeatedly.
+    - Preserves distinct subcategories (e.g. /catalogue/category/books/travel_2/).
+    """
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return None
+
+        scheme = parsed.scheme.lower()
+        netloc = parsed.netloc.lower()
+        path = parsed.path or "/"
+
+        # Normalize directory index files to directory path
+        for idx in ("/index.html", "/index.htm", "/index.php", "/default.html"):
+            if path.endswith(idx):
+                path = path[:-len(idx)] or "/"
+                break
+
+        # If path does not end with '/' and has no file extension, append trailing slash
+        last_seg = path.split("/")[-1]
+        if not path.endswith("/") and "." not in last_seg:
+            path = path + "/"
+
+        # Collapse duplicate slashes
+        path = re.sub(r"/+", "/", path)
+
+        # Detect top-level root category mirroring site catalog:
+        # e.g. /catalogue/category/books_1/ or /category/books_1/ on books.toscrape.com
+        # Matches top-level parent category that contains all books/products (e.g. books_1)
+        # while preserving distinct category pages like /catalogue/category/books/travel_2/
+        if re.search(r"/(?:catalogue/)?category/books_1/?$", path):
+            path = "/"
+
+        clean = urllib.parse.urlunparse((scheme, netloc, path, "", parsed.query, ""))
         return clean
     except Exception:
         return None

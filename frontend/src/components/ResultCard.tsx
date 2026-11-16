@@ -33,10 +33,35 @@ export const ResultCard: React.FC<ResultCardProps> = ({
 
   const covScore = result.coverage?.score ?? result.coverage_score;
   const covBreakdown = result.coverage?.notes ?? result.coverage_breakdown;
-  const isCoverageEstablished =
-    result.coverage?.coverage_established !== undefined
-      ? result.coverage.coverage_established
-      : !(pagesCrawled === 1 && (result.coverage?.pages_limit ?? 10) > 1);
+
+  const pagesDiscovered =
+    result.coverage?.pages_discovered ??
+    (result.json?.stats as any)?.pages_discovered ??
+    pagesCrawled;
+  const pagesLimit =
+    result.coverage?.pages_limit ??
+    (result.plan as any)?.max_pages ??
+    (result.json?.stats as any)?.pages_limit ??
+    10;
+  const limitUtil =
+    result.coverage?.page_limit_utilization ??
+    (pagesLimit > 0 ? (pagesCrawled / pagesLimit) * 100 : 100);
+  const discRatio =
+    result.coverage?.discovered_ratio ??
+    (pagesDiscovered > 0 ? (pagesCrawled / pagesDiscovered) * 100 : 100);
+
+  const isFullWebsiteCoverage =
+    result.coverage?.coverage_established === true ||
+    (result.coverage?.coverage_established === undefined &&
+      (result.coverage?.score === 100 || result.coverage_score === 100) &&
+      pagesCrawled !== 1 &&
+      pagesDiscovered <= pagesCrawled);
+
+  const scoreDisplay = isFullWebsiteCoverage
+    ? formatPercent(covScore)
+    : pagesCrawled <= 1
+    ? 'Coverage not fully established'
+    : `${discRatio.toFixed(2)}%`;
 
   // Flatten extracted facts
   const extractedList: Array<{ type: string; value: string; source_url: string }> = [];
@@ -295,7 +320,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
           <span
             className="tabular-num"
             style={{
-              fontSize: isCoverageEstablished ? '22px' : '16px',
+              fontSize: isFullWebsiteCoverage || pagesDiscovered > pagesCrawled ? '22px' : '16px',
               fontWeight: 700,
               color: 'var(--ink)',
               whiteSpace: 'nowrap',
@@ -303,7 +328,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
               display: 'inline-block',
             }}
           >
-            {isCoverageEstablished ? formatPercent(covScore) : 'Coverage not fully established'}
+            {scoreDisplay}
           </span>
           {covBreakdown && (
             <span
@@ -322,6 +347,41 @@ export const ResultCard: React.FC<ResultCardProps> = ({
             </span>
           )}
         </div>
+
+        {pagesDiscovered > 1 && (
+          <div
+            style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '12px',
+              marginTop: '4px',
+              fontSize: '12px',
+            }}
+          >
+            <div
+              style={{
+                padding: '3px 8px',
+                borderRadius: '4px',
+                backgroundColor: 'var(--card)',
+                border: '1px solid var(--hairline)',
+                color: 'var(--ink)',
+              }}
+            >
+              <strong>Page limit utilization:</strong> {pagesCrawled}/{pagesLimit} = {limitUtil % 1 === 0 ? limitUtil.toFixed(0) : limitUtil.toFixed(2)}%
+            </div>
+            <div
+              style={{
+                padding: '3px 8px',
+                borderRadius: '4px',
+                backgroundColor: 'var(--card)',
+                border: '1px solid var(--hairline)',
+                color: 'var(--ink)',
+              }}
+            >
+              <strong>Discovered-page crawl ratio:</strong> {pagesCrawled}/{pagesDiscovered} = {discRatio % 1 === 0 && pagesCrawled === pagesDiscovered ? discRatio.toFixed(0) : discRatio.toFixed(2)}%
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Summary & Key Takeaways */}

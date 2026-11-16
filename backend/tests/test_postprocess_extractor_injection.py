@@ -129,6 +129,37 @@ class TestPostprocess:
         assert "coverage not fully established" not in cov_multi.notes
         assert "2 of 2 discovered pages crawled (limit: 10)" in cov_multi.notes
 
+    def test_coverage_5_of_105_discovered_pages(self) -> None:
+        """
+        Regression test: 5 pages crawled, 105 pages discovered, max_pages=5.
+        - Page limit utilization: 5/5 = 100%.
+        - Discovered-page crawl ratio: 5/105 = 4.76%.
+        - Never claim full website coverage (coverage_established=False).
+        - Coverage score must reflect the discovered-page ratio (~5%), NOT 100%.
+        """
+        crawl_data = {
+            "site": "https://books.toscrape.com/",
+            "pages": [{"url": f"https://books.toscrape.com/page{i}"} for i in range(1, 6)],
+            "errors": [],
+            "skipped": [],
+            "stats": {
+                "pages_crawled": 5,
+                "pages_discovered": 105,
+                "pages_limit": 5,
+                "duration_s": 2.5,
+            },
+        }
+        cov = compute_coverage(crawl_data, {"max_pages": 5})
+        assert cov.pages_crawled == 5
+        assert cov.pages_discovered == 105
+        assert cov.pages_limit == 5
+        assert cov.page_limit_utilization == 100.0
+        assert cov.discovered_ratio == 4.76
+        assert cov.coverage_established is False
+        assert cov.score == 5  # 5% (not 100%)
+        assert "Page limit utilization: 5/5 = 100%" in cov.notes
+        assert "Discovered-page crawl ratio: 5/105 = 4.76%" in cov.notes
+
 
 class TestExtractor:
     def test_extracted_facts_carry_source_url(self) -> None:

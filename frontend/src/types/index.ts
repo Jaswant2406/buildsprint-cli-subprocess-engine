@@ -41,6 +41,8 @@ export interface CoverageBreakdown {
   pages_crawled?: number;
   pages_discovered?: number;
   pages_limit?: number;
+  page_limit_utilization?: number;
+  discovered_ratio?: number;
   coverage_established?: boolean;
   error_ratio?: number;
   robots_skips?: number;

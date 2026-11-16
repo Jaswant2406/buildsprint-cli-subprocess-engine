@@ -84,6 +84,8 @@ export const App: React.FC = () => {
     typeof window !== 'undefined' ? window.innerWidth >= 768 : false
   );
   const [showLogsDrawer, setShowLogsDrawer] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [refreshSuccess, setRefreshSuccess] = useState<boolean>(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -124,6 +126,64 @@ export const App: React.FC = () => {
       setErrorMsg('Cannot connect to backend. Ensure the backend server is running.');
     }
   }, []);
+
+  // Refresh handler: updates health, runs, audit, and tools while preserving selected run
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    setRefreshSuccess(false);
+
+    try {
+      const [h, a, t, r] = await Promise.all([
+        fetchHealth(),
+        fetchAudit().catch(() => null),
+        fetchTools().catch(() => []),
+        fetchRuns().catch(() => []),
+      ]);
+      setHealth(h);
+      if (a) setAudit(a);
+      setTools(t);
+      setRuns(r);
+      setBackendOnline(true);
+      setErrorMsg(null);
+
+      // Preserve active run data if selected
+      if (activeRunId) {
+        try {
+          const runDetail = await fetchRun(activeRunId);
+          if (runDetail) {
+            if (Array.isArray(runDetail.events)) {
+              setEvents(runDetail.events as RunEventPayload[]);
+            }
+            if (runDetail.plan) {
+              setCurrentPlan(runDetail.plan as Plan);
+            }
+            if (runDetail.result) {
+              const res = runDetail.result as ChatResult;
+              setResult(res);
+              setTerminalStatus(res.status);
+            }
+          }
+        } catch {
+          // If active run fetch fails, keep current displayed results
+        }
+      }
+
+      setRefreshSuccess(true);
+      setTimeout(() => {
+        setRefreshSuccess(false);
+      }, 2500);
+    } catch (err: unknown) {
+      setBackendOnline(false);
+      setErrorMsg(
+        err instanceof Error
+          ? `Refresh failed: ${err.message}`
+          : 'Failed to refresh application data. Backend may be offline.'
+      );
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, activeRunId]);
 
   useEffect(() => {
     loadSystemState();
@@ -293,8 +353,10 @@ export const App: React.FC = () => {
           setIsSidebarOpen(next);
           if (next) navigate('/runs');
         }}
-        onRefreshHistory={loadSystemState}
+        onRefreshHistory={handleRefresh}
         onNavigateHome={() => navigate('/')}
+        isRefreshing={isRefreshing}
+        refreshSuccess={refreshSuccess}
       />
 
       {/* Main Workspace with Sidebar */}
