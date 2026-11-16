@@ -84,6 +84,51 @@ class TestPostprocess:
         assert cov_partial.score < cov_complete.score
         assert cov_partial.score < 50
 
+    def test_coverage_1_of_10_example_com_scenario(self) -> None:
+        """
+        Regression test: When 1 page is crawled under max_pages=10 (e.g. example.com),
+        it must clearly distinguish pages crawled (1), pages discovered (1), and limit (10).
+        Coverage must NOT be claimed as established (coverage_established=False).
+        """
+        crawl_data = {
+            "site": "https://example.com",
+            "pages": [{"url": "https://example.com", "title": "Example Domain"}],
+            "errors": [],
+            "skipped": [],
+            "stats": {
+                "pages_crawled": 1,
+                "pages_discovered": 1,
+                "pages_limit": 10,
+                "duration_s": 0.45,
+            },
+        }
+        cov = compute_coverage(crawl_data, {"max_pages": 10})
+        assert cov.pages_crawled == 1
+        assert cov.pages_discovered == 1
+        assert cov.pages_limit == 10
+        assert cov.coverage_established is False
+        assert cov.score == 100
+        # Notes must clearly distinguish discovered pages from limit and indicate coverage not established
+        assert "1 of 1 discovered page crawled (limit: 10)" in cov.notes
+        assert "coverage not fully established" in cov.notes
+
+        # Multi-page crawl scenario: coverage IS established
+        multi_crawl = {
+            "pages": [
+                {"url": "https://example.com/page1"},
+                {"url": "https://example.com/page2"},
+            ],
+            "errors": [],
+            "skipped": [],
+            "stats": {"pages_crawled": 2, "pages_discovered": 2, "pages_limit": 10},
+        }
+        cov_multi = compute_coverage(multi_crawl, {"max_pages": 10})
+        assert cov_multi.pages_crawled == 2
+        assert cov_multi.pages_discovered == 2
+        assert cov_multi.coverage_established is True
+        assert "coverage not fully established" not in cov_multi.notes
+        assert "2 of 2 discovered pages crawled (limit: 10)" in cov_multi.notes
+
 
 class TestExtractor:
     def test_extracted_facts_carry_source_url(self) -> None:

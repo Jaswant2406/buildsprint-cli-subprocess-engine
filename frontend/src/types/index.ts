@@ -37,13 +37,44 @@ export interface ExtractedFact {
 }
 
 export interface CoverageBreakdown {
-  score: number;
+  score?: number | null;
   pages_crawled?: number;
+  pages_discovered?: number;
   pages_limit?: number;
+  coverage_established?: boolean;
   error_ratio?: number;
   robots_skips?: number;
   redirects_blocked?: number;
   notes?: string;
+}
+
+export interface JobRecord {
+  title?: string | null;
+  company?: string | null;
+  location?: string | null;
+  date_posted?: string | null;
+  description?: string | null;
+  job_url?: string | null;
+  apply_url?: string | null;
+  source_url: string;
+}
+
+export interface JobExtractionStats {
+  total_jobs: number;
+  companies: number;
+  locations: number;
+  with_job_url?: number;
+  with_apply_url: number;
+  with_date: number;
+  with_description: number;
+  crawled_detail_pages?: number;
+  is_partial_crawl?: boolean;
+  coverage_note?: string;
+}
+
+export interface JobExtractionResult {
+  records: JobRecord[];
+  stats: JobExtractionStats;
 }
 
 export interface ChatResult {
@@ -69,6 +100,7 @@ export interface ChatResult {
   coverage?: CoverageBreakdown;
   coverage_score?: number;
   coverage_breakdown?: string;
+  jobs?: JobExtractionResult;
   audit_hash?: string;
 }
 

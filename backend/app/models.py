@@ -112,13 +112,44 @@ class SecurityFinding(BaseModel):
 
 
 class CoverageBreakdown(BaseModel):
-    score: int = Field(ge=0, le=100)
+    score: int | None = Field(default=None, ge=0, le=100)
     pages_crawled: int = 0
+    pages_discovered: int = 0
     pages_limit: int = 0
+    coverage_established: bool = True
     error_ratio: float = 0.0
     robots_skips: int = 0
     redirects_blocked: int = 0
     notes: str = ""
+
+
+class JobRecord(BaseModel):
+    title: str | None = None
+    company: str | None = None
+    location: str | None = None
+    date_posted: str | None = None
+    description: str | None = None
+    job_url: str | None = None
+    apply_url: str | None = None
+    source_url: str
+
+
+class JobExtractionStats(BaseModel):
+    total_jobs: int = 0
+    companies: int = 0
+    locations: int = 0
+    with_job_url: int = 0
+    with_apply_url: int = 0
+    with_date: int = 0
+    with_description: int = 0
+    crawled_detail_pages: int = 0
+    is_partial_crawl: bool = False
+    coverage_note: str = ""
+
+
+class JobExtractionResult(BaseModel):
+    records: list[JobRecord] = Field(default_factory=list)
+    stats: JobExtractionStats = Field(default_factory=JobExtractionStats)
 
 
 class ChatResult(BaseModel):
@@ -138,6 +169,7 @@ class ChatResult(BaseModel):
     security_findings: list[SecurityFinding] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     evidence: Extracted | None = None
+    jobs: JobExtractionResult | None = None
     audit_hash: str = ""
 
     model_config = {"populate_by_name": True}

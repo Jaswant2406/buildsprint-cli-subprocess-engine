@@ -7,7 +7,7 @@ interface NavbarProps {
   audit: AuditChain | null;
   backendOnline: boolean;
   onToggleSidebar: () => void;
-  onRefreshHistory: () => void;
+  onRefreshHistory?: () => void;
   onNavigateHome?: () => void;
 }
 
@@ -16,7 +16,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   audit,
   backendOnline,
   onToggleSidebar,
-  onRefreshHistory,
+  onRefreshHistory: _onRefreshHistory,
   onNavigateHome,
 }) => {
   return (
@@ -152,7 +152,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <span>Mode:</span>
             <strong style={{ color: 'var(--navy)', fontWeight: 600 }}>
-              {health.llm_mode.toUpperCase()}
+              {(health.llm_mode || 'heuristic').toUpperCase()}
             </strong>
             <span style={{ color: 'var(--muted)', fontSize: '11px' }}>
               v{health.version}
@@ -201,30 +201,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               }}
               title="Cryptographic SHA-256 hash chaining of all execution logs"
             >
-              <span>🔒 Audit Chain:</span>
+              <span>Audit Chain:</span>
               <span>{badgeText}</span>
             </div>
           );
         })()}
-
-        <button
-          onClick={onRefreshHistory}
-          title="Refresh runs and audit chain"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            padding: '6px 12px',
-            backgroundColor: 'var(--page)',
-            border: '1px solid var(--hairline)',
-            borderRadius: '6px',
-            color: 'var(--ink)',
-            fontSize: '12px',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          ↻ Refresh
-        </button>
       </div>
     </header>
   );

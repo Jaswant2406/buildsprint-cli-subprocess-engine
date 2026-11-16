@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { ChatResult } from '../types';
 import { API_BASE } from '../utils/api';
 import { formatDuration, formatNumber, formatPercent } from '../utils/format';
+import { InlineMarkdown, MarkdownView } from './MarkdownView';
 
 interface ResultCardProps {
   result: ChatResult;
@@ -14,8 +15,12 @@ export const ResultCard: React.FC<ResultCardProps> = ({
   onOpenLogs,
   onReplay,
 }) => {
-  const [jsonExpanded, setJsonExpanded] = useState(false);
+  const [jsonExpanded, setJsonExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setJsonExpanded(true);
+  }, [result.run_id]);
 
   // Extract page count
   let pagesCrawled = result.pages_crawled ?? 0;
@@ -28,6 +33,10 @@ export const ResultCard: React.FC<ResultCardProps> = ({
 
   const covScore = result.coverage?.score ?? result.coverage_score;
   const covBreakdown = result.coverage?.notes ?? result.coverage_breakdown;
+  const isCoverageEstablished =
+    result.coverage?.coverage_established !== undefined
+      ? result.coverage.coverage_established
+      : !(pagesCrawled === 1 && (result.coverage?.pages_limit ?? 10) > 1);
 
   // Flatten extracted facts
   const extractedList: Array<{ type: string; value: string; source_url: string }> = [];
@@ -170,7 +179,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
-            <span style={{ fontWeight: 600, color: 'var(--navy)', flexShrink: 0 }}>🔒 Audit Block:</span>
+            <span style={{ fontWeight: 600, color: 'var(--navy)', flexShrink: 0 }}>Audit Block:</span>
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {result.audit_hash}
             </span>
@@ -181,8 +190,15 @@ export const ResultCard: React.FC<ResultCardProps> = ({
         </div>
       )}
 
-      {/* Metrics Row (Spec: exit code, duration, page counts, coverage formatted with toLocaleString('en-IN')) */}
-      <div className="responsive-grid" style={{ margin: '8px 0' }}>
+      {/* Metrics Row (Exit Code, Duration, Pages Crawled) */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: '12px',
+          margin: '8px 0 12px 0',
+        }}
+      >
         <div
           style={{
             padding: '12px 16px',
@@ -239,31 +255,72 @@ export const ResultCard: React.FC<ResultCardProps> = ({
             {formatNumber(pagesCrawled)}
           </span>
         </div>
+      </div>
 
-        <div
+      {/* Coverage Score Card */}
+      <div
+        data-testid="coverage-score-card"
+        style={{
+          padding: '14px 18px',
+          backgroundColor: 'var(--page)',
+          borderRadius: '8px',
+          border: '1px solid var(--hairline)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
+          marginBottom: '12px',
+        }}
+      >
+        <span
+          className="eyebrow"
           style={{
-            padding: '12px 16px',
-            backgroundColor: 'var(--page)',
-            borderRadius: '8px',
-            border: '1px solid var(--hairline)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
+            color: 'var(--muted)',
+            fontSize: '12px',
+            fontWeight: 700,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
           }}
         >
-          <span className="eyebrow" style={{ color: 'var(--muted)' }}>
-            Coverage Score
+          COVERAGE SCORE
+        </span>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'baseline',
+            gap: '12px',
+            minWidth: 0,
+          }}
+        >
+          <span
+            className="tabular-num"
+            style={{
+              fontSize: isCoverageEstablished ? '22px' : '16px',
+              fontWeight: 700,
+              color: 'var(--ink)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              display: 'inline-block',
+            }}
+          >
+            {isCoverageEstablished ? formatPercent(covScore) : 'Coverage not fully established'}
           </span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span className="tabular-num" style={{ fontSize: '20px', color: 'var(--ink)' }}>
-              {formatPercent(covScore)}
+          {covBreakdown && (
+            <span
+              className="caption"
+              style={{
+                color: 'var(--muted)',
+                fontSize: '13px',
+                lineHeight: 1.5,
+                flex: 1,
+                minWidth: '240px',
+              }}
+            >
+              {covBreakdown.startsWith('(') && covBreakdown.endsWith(')')
+                ? covBreakdown
+                : `(${covBreakdown})`}
             </span>
-            {covBreakdown && (
-              <span className="caption" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-                ({covBreakdown})
-              </span>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
@@ -290,9 +347,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
           >
             Research Summary
           </h3>
-          <p className="body-text" style={{ color: 'var(--ink)', whiteSpace: 'pre-line' }}>
-            {result.summary}
-          </p>
+          <MarkdownView content={result.summary} />
 
           {result.key_takeaways && result.key_takeaways.length > 0 && (
             <div style={{ marginTop: '8px' }}>
@@ -302,7 +357,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
               <ul style={{ paddingLeft: '20px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {result.key_takeaways.map((takeaway, idx) => (
                   <li key={idx} style={{ color: 'var(--ink)', fontSize: '13px', lineHeight: '1.6' }}>
-                    {takeaway}
+                    <InlineMarkdown text={takeaway} />
                   </li>
                 ))}
               </ul>
@@ -376,6 +431,124 @@ export const ResultCard: React.FC<ResultCardProps> = ({
                           style={{ color: 'var(--navy)', textDecoration: 'underline' }}
                         >
                           {item.source_url}
+                        </a>
+                      ) : (
+                        '–'
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Structured Job Listings (when requested) */}
+      {result.jobs && result.jobs.records && result.jobs.records.length > 0 && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            padding: '16px',
+            backgroundColor: 'var(--page)',
+            borderRadius: '8px',
+            border: '1px solid var(--hairline)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <h3
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontWeight: 700,
+                fontSize: '16px',
+                color: 'var(--ink)',
+                margin: 0,
+              }}
+            >
+              Structured Job Listings ({result.jobs.records.length})
+            </h3>
+            <span className="caption" style={{ color: 'var(--muted)', fontSize: '12px' }}>
+              {result.jobs.stats.companies} companies • {result.jobs.stats.locations} locations
+              {result.jobs.stats.crawled_detail_pages !== undefined && result.jobs.stats.crawled_detail_pages > 0
+                ? ` • ${result.jobs.stats.crawled_detail_pages} detail pages crawled`
+                : ''}
+            </span>
+          </div>
+
+          {result.jobs.stats.coverage_note && (
+            <div
+              style={{
+                padding: '8px 12px',
+                backgroundColor: 'var(--card)',
+                borderRadius: '6px',
+                border: '1px solid var(--hairline)',
+                color: 'var(--ink)',
+                fontSize: '12px',
+                lineHeight: '1.4',
+              }}
+            >
+              <strong style={{ color: 'var(--navy)' }}>Coverage Note:</strong> {result.jobs.stats.coverage_note}
+            </div>
+          )}
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--hairline)', textAlign: 'left', backgroundColor: 'var(--card)' }}>
+                  <th style={{ padding: '8px 12px', color: 'var(--ink)', fontWeight: 600 }}>Title</th>
+                  <th style={{ padding: '8px 12px', color: 'var(--ink)', fontWeight: 600 }}>Company</th>
+                  <th style={{ padding: '8px 12px', color: 'var(--ink)', fontWeight: 600 }}>Location</th>
+                  <th style={{ padding: '8px 12px', color: 'var(--ink)', fontWeight: 600 }}>Date</th>
+                  <th style={{ padding: '8px 12px', color: 'var(--ink)', fontWeight: 600 }}>Job Details</th>
+                  <th style={{ padding: '8px 12px', color: 'var(--ink)', fontWeight: 600 }}>Apply URL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.jobs.records.map((job, idx) => (
+                  <tr
+                    key={idx}
+                    style={{
+                      borderBottom: idx === result.jobs!.records.length - 1 ? 'none' : '1px solid var(--hairline)',
+                      backgroundColor: idx % 2 === 0 ? 'var(--card)' : 'var(--page)',
+                    }}
+                  >
+                    <td style={{ padding: '8px 12px', color: 'var(--navy)', fontWeight: 600 }}>
+                      {job.title || '–'}
+                    </td>
+                    <td style={{ padding: '8px 12px', color: 'var(--ink)' }}>
+                      {job.company || '–'}
+                    </td>
+                    <td style={{ padding: '8px 12px', color: 'var(--muted)' }}>
+                      {job.location || '–'}
+                    </td>
+                    <td style={{ padding: '8px 12px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                      {job.date_posted || '–'}
+                    </td>
+                    <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
+                      {job.job_url ? (
+                        <a
+                          href={job.job_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--navy)', textDecoration: 'underline' }}
+                        >
+                          View Details
+                        </a>
+                      ) : (
+                        '–'
+                      )}
+                    </td>
+                    <td style={{ padding: '8px 12px', fontFamily: 'var(--font-mono)', fontSize: '12px' }}>
+                      {job.apply_url ? (
+                        <a
+                          href={job.apply_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--navy)', textDecoration: 'underline' }}
+                        >
+                          Apply Link
                         </a>
                       ) : (
                         '–'

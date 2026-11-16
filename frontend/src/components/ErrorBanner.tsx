@@ -53,7 +53,32 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
         <span style={{ fontWeight: 700, fontSize: '15px' }}>⚠</span>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <strong style={{ color: 'var(--status-failed-text)' }}>Execution Guardrail / Policy Error:</strong>
+          <strong style={{ color: 'var(--status-failed-text)' }}>
+            {(() => {
+              const lower = error.toLowerCase();
+              if (
+                lower.includes('dns') ||
+                lower.includes('getaddrinfo') ||
+                lower.includes('name or service not known') ||
+                lower.includes('could not resolve') ||
+                lower.includes('unreachable')
+              ) {
+                return 'DNS / Network Resolution Error:';
+              }
+              if (
+                lower.includes('ssrf') ||
+                lower.includes('forbidden address') ||
+                lower.includes('private address') ||
+                lower.includes('loopback')
+              ) {
+                return 'Security Policy Error (SSRF Protection):';
+              }
+              if (lower.includes('rate limit') || lower.includes('concurrency') || lower.includes('busy')) {
+                return 'Concurrency / Rate Limit Notice:';
+              }
+              return 'Execution Guardrail / Policy Error:';
+            })()}
+          </strong>
           <span style={{ color: 'var(--status-failed-text)', overflowWrap: 'anywhere' }}>
             {error}
           </span>

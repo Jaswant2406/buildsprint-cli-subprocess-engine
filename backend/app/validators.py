@@ -52,7 +52,13 @@ def validate_url(url: str, allow_localhost: bool = False) -> str:
     try:
         _resolve_and_validate(host, allow_localhost=allow_localhost)
     except SSRFError as e:
-        raise ValidationError(str(e), "ssrf_blocked") from e
+        msg = str(e)
+        if "DNS resolution failed" in msg or "getaddrinfo failed" in msg:
+            raise ValidationError(
+                f"DNS resolution failed: Host '{host}' could not be resolved or is unreachable ({e})",
+                "dns_resolution_failed",
+            ) from e
+        raise ValidationError(msg, "ssrf_blocked") from e
 
     # Reconstruct clean URL (no credentials)
     return url

@@ -116,14 +116,19 @@ def _heuristic_parse(prompt: str) -> Plan:
     wants_summary = bool(_SUMMARY_RE.search(prompt)) or not is_link_check
     wants_json = bool(_JSON_RE.search(prompt))
 
+    # Strip target URL from prompt so URL path words don't trigger intent modifiers
+    prompt_text = prompt.replace(url, "")
+
     # Extract focus
     extract_focus = ""
-    if re.search(r"\bonly\s+emails?\b", prompt, re.IGNORECASE):
+    if re.search(r"\bonly\s+emails?\b", prompt_text, re.IGNORECASE):
         extract_focus = "only emails"
-    elif re.search(r"\bonly\s+phones?\b", prompt, re.IGNORECASE):
+    elif re.search(r"\bonly\s+phones?\b", prompt_text, re.IGNORECASE):
         extract_focus = "only phones"
-    elif re.search(r"\bcontact\b", prompt, re.IGNORECASE):
+    elif re.search(r"\bcontact\b", prompt_text, re.IGNORECASE):
         extract_focus = "contact info"
+    elif re.search(r"\b(?:jobs?|job\s+listings?|careers?|vacanc(?:y|ies))\b", prompt_text, re.IGNORECASE):
+        extract_focus = "jobs"
 
     # max_pages
     max_pages = 10

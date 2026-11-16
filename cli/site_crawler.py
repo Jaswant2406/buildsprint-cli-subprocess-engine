@@ -96,12 +96,36 @@ def _extract_page_data(url: str, html: str) -> dict[str, Any]:
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
 
-    title = soup.title.get_text(strip=True) if soup.title else ""
+    # Images
+    images = soup.find_all("img", src=True)
+
+    # Improve anchor text: resolve truncated titles without modifying img elements
+    for a in soup.find_all("a", href=True):
+        title_attr = str(a.get("title", "") or "").strip()
+        if title_attr and not a.find("img"):
+            curr = a.get_text(strip=True)
+            if "..." in curr or "…" in curr or (len(title_attr) > len(curr) and curr in title_attr):
+                a.string = title_attr
+
+    raw_title = soup.title.get_text(strip=True) if soup.title else ""
+    title = " ".join(raw_title.split())
 
     meta_desc = ""
     meta_tag = soup.find("meta", attrs={"name": ["description", "Description"]})
     if meta_tag and hasattr(meta_tag, "get"):
-        meta_desc = str(meta_tag.get("content", "") or "")
+        meta_desc = " ".join(str(meta_tag.get("content", "") or "").split())
+    if not meta_desc:
+        og_desc = soup.find("meta", attrs={"property": "og:description"}) or soup.find(
+            "meta", attrs={"name": "twitter:description"}
+        )
+        if og_desc and hasattr(og_desc, "get"):
+            meta_desc = " ".join(str(og_desc.get("content", "") or "").split())
+    if not meta_desc:
+        p_desc = soup.select_one(
+            "#product_description ~ p, [itemprop='description'], .product-description, .product_page p"
+        )
+        if p_desc:
+            meta_desc = " ".join(p_desc.get_text(strip=True).split())[:500]
 
     # Language
     html_tag = soup.find("html")
@@ -110,14 +134,49 @@ def _extract_page_data(url: str, html: str) -> dict[str, Any]:
         language = str(html_tag.get("lang", "") or "")
 
     # Headings
-    h1s = [h.get_text(strip=True) for h in soup.find_all("h1")][:5]
-    h2s = [h.get_text(strip=True) for h in soup.find_all("h2")][:8]
+    h1s = [
+        " ".join(h.get_text(strip=True).split())
+        for h in soup.find_all("h1")
+        if h.get_text(strip=True)
+    ][:5]
+    h2s = [
+        " ".join(h.get_text(strip=True).split())
+        for h in soup.find_all("h2")
+        if h.get_text(strip=True)
+    ][:8]
 
-    # Main text
-    main = soup.find("main") or soup.find("article") or soup.find("body")
+    # Category / breadcrumb information
+    breadcrumbs: list[str] = []
+    for li in soup.select(".breadcrumb li, [aria-label='breadcrumb'] li, .breadcrumbs li, nav.breadcrumb a"):
+        txt = " ".join(li.get_text(strip=True).split())
+        if txt and txt not in breadcrumbs:
+            breadcrumbs.append(txt)
+
+    # Main text container selection:
+    # If a single article exists (e.g. detail page), extract that article.
+    # If multiple articles exist (e.g. catalog cards) or none, extract from main/body to capture all items.
+    articles = soup.find_all("article")
+    main = None
+    if soup.find("main"):
+        main = soup.find("main")
+    elif len(articles) == 1:
+        main = articles[0]
+    elif soup.find("div", attrs={"role": "main"}):
+        main = soup.find("div", attrs={"role": "main"})
+    elif soup.find(id=["main", "content", "main-content", "page-content"]):
+        main = soup.find(id=["main", "content", "main-content", "page-content"])
+    else:
+        main = soup.find("body")
+
     main_text = ""
     if main:
-        main_text = main.get_text(separator=" ", strip=True)[:2000]
+        clean_text = " ".join(main.get_text(separator=" ", strip=True).split())
+        if breadcrumbs:
+            cat_crumbs = breadcrumbs[1:-1] if len(breadcrumbs) > 2 else breadcrumbs
+            crumb_str = "Category: " + " > ".join(cat_crumbs)
+            if crumb_str not in clean_text:
+                clean_text = f"{crumb_str} | {clean_text}"
+        main_text = clean_text[:3000]
 
     # Links
     links: list[str] = []
@@ -127,9 +186,6 @@ def _extract_page_data(url: str, html: str) -> dict[str, Any]:
         parsed = urllib.parse.urlparse(abs_url)
         if parsed.scheme in ("http", "https"):
             links.append(abs_url)
-
-    # Images
-    images = soup.find_all("img", src=True)
 
     # Emails from mailto links and text
     emails: list[str] = []
@@ -235,7 +291,12 @@ def crawl(
                     "pages": [],
                     "skipped": [{"url": start_url, "reason": "robots_disallowed"}],
                     "errors": [],
-                    "stats": {"pages_crawled": 0, "duration_s": 0},
+                    "stats": {
+                        "pages_crawled": 0,
+                        "pages_discovered": len(visited),
+                        "pages_limit": max_pages,
+                        "duration_s": 0,
+                    },
                 }
         except Exception:
             pass
@@ -319,6 +380,8 @@ def crawl(
         "errors": errors,
         "stats": {
             "pages_crawled": len(pages),
+            "pages_discovered": len(visited),
+            "pages_limit": max_pages,
             "duration_s": duration,
         },
     }

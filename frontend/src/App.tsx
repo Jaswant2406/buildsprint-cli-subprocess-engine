@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AskBox } from './components/AskBox';
 import { ChatInput } from './components/ChatInput';
 import { ErrorBanner } from './components/ErrorBanner';
 import { ExecutionTimeline } from './components/ExecutionTimeline';
@@ -430,9 +429,6 @@ export const App: React.FC = () => {
                   onReplay={handleReplay}
                 />
               )}
-
-              {/* Follow-up Q&A Box */}
-              {result && activeRunId && <AskBox runId={activeRunId} />}
             </>
           )}
         </main>

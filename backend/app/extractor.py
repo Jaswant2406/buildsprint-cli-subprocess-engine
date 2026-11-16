@@ -188,6 +188,10 @@ def build_extracted(
                 "emails": [{"value": e.value, "source_url": e.source_url} for e in emails],
                 "phones": [{"value": p.value, "source_url": p.source_url} for p in phones],
             }
+        elif "job" in focus_lower:
+            from app.job_extractor import extract_jobs_from_crawl
+
+            focus_result = extract_jobs_from_crawl(crawl_data)
 
     return Extracted(
         site_name=site_name,

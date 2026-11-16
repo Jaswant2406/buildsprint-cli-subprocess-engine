@@ -25,9 +25,18 @@ def compute_coverage(data: dict[str, Any], plan_dict: dict[str, Any]) -> Coverag
         redirect_blocked = sum(1 for s in skipped if "redirect" in s.get("reason", "").lower())
         total = pages_crawled + len(errors) + len(skipped)
 
+        stats = data.get("stats", {})
+        if isinstance(stats.get("pages_discovered"), int) and stats["pages_discovered"] > 0:
+            pages_discovered = stats["pages_discovered"]
+        else:
+            pages_discovered = max(total, pages_crawled, 1 if pages_crawled > 0 else 0)
+
+        coverage_established = pages_crawled > 1
+
         if pages_crawled == 0:
             score = 0
             error_ratio = 1.0 if total > 0 else 0.0
+            coverage_established = False
         else:
             error_ratio = len(errors) / max(total, 1)
             # Complete crawl with zero errors or skips scores near 100
@@ -40,16 +49,19 @@ def compute_coverage(data: dict[str, Any], plan_dict: dict[str, Any]) -> Coverag
                 score = int(completeness * 50 + success_ratio * 40 + 10 - penalty)
                 score = max(0, min(100, score))
 
-        discoverable_pages = max(total, pages_crawled)
-        notes = (
-            f"{pages_crawled} of {discoverable_pages} discoverable pages crawled, "
-            f"{len(errors)} errors, {robots_skips} robots-skipped, "
-            f"{redirect_blocked} redirects-blocked"
-        )
+        disc_str = f"{pages_crawled} of {pages_discovered} discovered page{'s' if pages_discovered != 1 else ''} crawled (limit: {pages_limit})"
+        skip_str = f"{len(errors)} errors, {robots_skips} robots-skipped, {redirect_blocked} redirects-blocked"
+        if not coverage_established:
+            notes = f"{disc_str}, {skip_str}, coverage not fully established"
+        else:
+            notes = f"{disc_str}, {skip_str}"
+
         return CoverageBreakdown(
             score=score,
             pages_crawled=pages_crawled,
+            pages_discovered=pages_discovered,
             pages_limit=pages_limit,
+            coverage_established=coverage_established,
             error_ratio=round(error_ratio, 3),
             robots_skips=robots_skips,
             redirects_blocked=redirect_blocked,
@@ -62,6 +74,7 @@ def compute_coverage(data: dict[str, Any], plan_dict: dict[str, Any]) -> Coverag
         checked = stats.get("checked", 0)
         working = stats.get("working", 0)
         broken = stats.get("broken", 0)
+        total = stats.get("total_links", checked)
         ratio = working / max(checked, 1)
         score = int(ratio * 90 + 10)
         score = max(0, min(100, score))
@@ -69,12 +82,14 @@ def compute_coverage(data: dict[str, Any], plan_dict: dict[str, Any]) -> Coverag
         return CoverageBreakdown(
             score=score,
             pages_crawled=checked,
+            pages_discovered=total,
             pages_limit=pages_limit,
+            coverage_established=checked > 0,
             error_ratio=round(1 - ratio, 3),
             notes=notes,
         )
 
-    return CoverageBreakdown(score=50, notes="unknown output format")
+    return CoverageBreakdown(score=50, coverage_established=False, notes="unknown output format")
 
 
 def _build_status_reason(
@@ -133,7 +148,7 @@ def postprocess(
             "status_reason": "run was cancelled",
             "json_valid": False,
             "data": None,
-            "coverage": CoverageBreakdown(score=0, notes="cancelled"),
+            "coverage": CoverageBreakdown(score=0, coverage_established=False, notes="cancelled"),
         }
     if state == RunState.TIMEOUT:
         return {
@@ -141,7 +156,7 @@ def postprocess(
             "status_reason": "run timed out",
             "json_valid": False,
             "data": None,
-            "coverage": CoverageBreakdown(score=0, notes="timeout"),
+            "coverage": CoverageBreakdown(score=0, coverage_established=False, notes="timeout"),
         }
     if state == RunState.STALLED:
         return {
@@ -149,7 +164,7 @@ def postprocess(
             "status_reason": "run stalled (no heartbeat for 15s)",
             "json_valid": False,
             "data": None,
-            "coverage": CoverageBreakdown(score=0, notes="stalled"),
+            "coverage": CoverageBreakdown(score=0, coverage_established=False, notes="stalled"),
         }
 
     # Try to parse JSON
@@ -170,7 +185,7 @@ def postprocess(
             "status_reason": f"invalid or missing JSON output (exit {exit_code})",
             "json_valid": False,
             "data": None,
-            "coverage": CoverageBreakdown(score=0, notes="invalid output"),
+            "coverage": CoverageBreakdown(score=0, coverage_established=False, notes="invalid output"),
         }
 
     # Determine status from exit code + data

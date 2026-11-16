@@ -243,8 +243,22 @@ async def chat(request: Request, body: ChatRequest) -> EventSourceResponse:
 
         # Build extracted evidence
         evidence = None
+        jobs_result = None
+        extraction_errors: list[str] = [str(e) for e in (crawl_data.get("errors", []) if crawl_data else [])]
+
         if crawl_data and "pages" in crawl_data:
             evidence = build_extracted(crawl_data, plan.extract_focus)
+            if evidence and evidence.focus_result and "records" in evidence.focus_result:
+                from app.models import JobExtractionResult
+
+                try:
+                    jobs_result = JobExtractionResult(**evidence.focus_result)
+                except Exception as exc:
+                    clean_err = str(exc).splitlines()[0][:120].strip()
+                    err_msg = f"Job extraction validation warning: {type(exc).__name__} ({clean_err})"
+                    logger.warning("Job extraction validation failed: %s", exc)
+                    extraction_errors.append(err_msg)
+                    jobs_result = None
 
         # Finalize record
         record.result = crawl_data
@@ -270,8 +284,9 @@ async def chat(request: Request, body: ChatRequest) -> EventSourceResponse:
             coverage_score=cov_score,
             coverage_breakdown=cov_breakdown,
             security_findings=security_findings,
-            errors=[str(e) for e in (crawl_data.get("errors", []) if crawl_data else [])],
+            errors=extraction_errors,
             evidence=evidence,
+            jobs=jobs_result,
             audit_hash=audit_hash,
         )
 
