@@ -1,4 +1,4 @@
-# BuildSprint Round 2: CLI-Driven AI Chat Execution Backend
+# BuildSprint: CLI-Driven AI Chat Execution Backend
 
 A production-grade, secure, and resilient execution system for AI-driven web tasks. Users issue natural-language requests; the backend parses intent, executes approved CLI tools as subprocesses with socket-level IP pinning and SSRF protection, extracts structured evidence with source provenance, and streams real-time progress and final results over Server-Sent Events (SSE). The frontend is a reactive React + Vite + TypeScript application served single-origin alongside the API.
 
