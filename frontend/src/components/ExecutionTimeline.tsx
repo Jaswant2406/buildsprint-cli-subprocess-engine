@@ -78,11 +78,29 @@ export const ExecutionTimeline: React.FC<ExecutionTimelineProps> = ({
       id: 'crawl',
       label: '4. Execute Web Navigation & Crawl',
       description: () => {
+        if (resultEvent) {
+          const res = resultEvent.data;
+          const json = res.json as Record<string, unknown> | undefined;
+          if (json && 'links' in json) {
+            const stats = json.stats as Record<string, number> | undefined;
+            const checked = stats?.checked ?? 0;
+            const total = stats?.total_links ?? checked;
+            const broken = stats?.broken ?? 0;
+            return `Checked ${formatNumber(checked)} of ${formatNumber(total)} links (${formatNumber(broken)} broken)`;
+          }
+          const pagesCrawled = (res.pages_crawled as number | undefined) ?? (Array.isArray(json?.pages) ? json.pages.length : 0);
+          const maxPages = (planEvent?.data?.max_pages as number | undefined) ?? (planEvent?.data?.tool_args as any)?.max_pages ?? ((res.plan as any)?.max_pages as number | undefined) ?? pagesCrawled;
+          const displayTotal = maxPages > 0 ? maxPages : pagesCrawled;
+          return `Crawled ${formatNumber(pagesCrawled)} of ${formatNumber(displayTotal)} discoverable pages`;
+        }
         if (latestProgress) {
-          const current = latestProgress.data.pages_crawled ?? latestProgress.data.current ?? 0;
-          const total = latestProgress.data.total_pages ?? latestProgress.data.total ?? 0;
+          const current = latestProgress.data.pages_so_far ?? latestProgress.data.pages ?? latestProgress.data.pages_crawled ?? latestProgress.data.current ?? (latestProgress.data.index != null ? (latestProgress.data.index as number) + 1 : 0);
+          const total = latestProgress.data.max_pages ?? latestProgress.data.total_pages ?? latestProgress.data.total ?? (planEvent?.data?.max_pages as number | undefined) ?? (planEvent?.data?.tool_args as any)?.max_pages ?? 0;
           const url = (latestProgress.data.url as string) || '';
-          return `Crawled ${formatNumber(Number(current))} of ${formatNumber(Number(total))} pages ${url ? `(${url})` : ''}`;
+          if (Number(total) > 0) {
+            return `Crawled ${formatNumber(Number(current))} of ${formatNumber(Number(total))} pages ${url ? `(${url})` : ''}`;
+          }
+          return `Crawled ${formatNumber(Number(current))} pages ${url ? `(${url})` : ''}`;
         }
         if (spawnedEvent) return 'Subprocess active, navigating pages...';
         return 'Pending crawl execution';

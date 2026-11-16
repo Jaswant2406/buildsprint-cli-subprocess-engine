@@ -18,13 +18,16 @@ export const ResultCard: React.FC<ResultCardProps> = ({
   const [copied, setCopied] = useState(false);
 
   // Extract page count
-  let pagesCrawled = 0;
-  if (result.json && typeof result.json === 'object') {
+  let pagesCrawled = result.pages_crawled ?? 0;
+  if (!pagesCrawled && result.json && typeof result.json === 'object') {
     const jsonPages = (result.json as Record<string, unknown>).pages;
     if (Array.isArray(jsonPages)) {
       pagesCrawled = jsonPages.length;
     }
   }
+
+  const covScore = result.coverage?.score ?? result.coverage_score;
+  const covBreakdown = result.coverage?.notes ?? result.coverage_breakdown;
 
   // Flatten extracted facts
   const extractedList: Array<{ type: string; value: string; source_url: string }> = [];
@@ -149,6 +152,35 @@ export const ResultCard: React.FC<ResultCardProps> = ({
         </div>
       )}
 
+      {/* Audit Hash */}
+      {result.audit_hash && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            padding: '8px 12px',
+            borderRadius: '6px',
+            backgroundColor: 'var(--page)',
+            border: '1px solid var(--hairline)',
+            fontSize: '12px',
+            color: 'var(--muted)',
+            fontFamily: 'var(--font-mono)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
+            <span style={{ fontWeight: 600, color: 'var(--navy)', flexShrink: 0 }}>🔒 Audit Block:</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {result.audit_hash}
+            </span>
+          </div>
+          <span style={{ fontSize: '11px', color: 'var(--status-success-text)', fontWeight: 600, flexShrink: 0 }}>
+            SHA-256 Chained
+          </span>
+        </div>
+      )}
+
       {/* Metrics Row (Spec: exit code, duration, page counts, coverage formatted with toLocaleString('en-IN')) */}
       <div className="responsive-grid" style={{ margin: '8px 0' }}>
         <div
@@ -224,11 +256,11 @@ export const ResultCard: React.FC<ResultCardProps> = ({
           </span>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
             <span className="tabular-num" style={{ fontSize: '20px', color: 'var(--ink)' }}>
-              {formatPercent(result.coverage_score)}
+              {formatPercent(covScore)}
             </span>
-            {result.coverage_breakdown && (
+            {covBreakdown && (
               <span className="caption" style={{ color: 'var(--muted)', fontSize: '11px' }}>
-                ({result.coverage_breakdown})
+                ({covBreakdown})
               </span>
             )}
           </div>

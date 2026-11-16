@@ -126,11 +126,18 @@ export const RunHistorySidebar: React.FC<RunHistorySidebarProps> = ({
                     <span className="caption" style={{ fontSize: '11px', color: 'var(--muted)' }}>
                       {formatTimestamp(r.created_at)}
                     </span>
-                    {r.duration_s !== undefined && (
-                      <span className="tabular-num" style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                        {r.duration_s.toFixed(1)}s
-                      </span>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      {r.pages_crawled !== undefined && r.pages_crawled > 0 && (
+                        <span className="tabular-num" style={{ fontSize: '11px', color: 'var(--navy)', fontWeight: 600 }}>
+                          {r.pages_crawled} {r.pages_crawled === 1 ? 'page' : 'pages'} •
+                        </span>
+                      )}
+                      {r.duration_s !== undefined && (
+                        <span className="tabular-num" style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                          {r.duration_s.toFixed(1)}s
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

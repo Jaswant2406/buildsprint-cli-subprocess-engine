@@ -117,6 +117,8 @@ class _AuditLog:
 
         return AuditChain(
             entries=[AuditEntry(**e) for e in entries],
+            records=[AuditEntry(**e) for e in entries],
+            length=len(entries),
             verified=verified,
         )
 

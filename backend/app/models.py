@@ -133,6 +133,8 @@ class ChatResult(BaseModel):
     json_output: dict[str, Any] | None = Field(default=None, alias="json")
     json_valid: bool = False
     coverage: CoverageBreakdown | None = None
+    coverage_score: int | None = None
+    coverage_breakdown: str | None = None
     security_findings: list[SecurityFinding] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     evidence: Extracted | None = None
@@ -155,6 +157,8 @@ class AuditEntry(BaseModel):
 
 class AuditChain(BaseModel):
     entries: list[AuditEntry]
+    records: list[AuditEntry] = Field(default_factory=list)
+    length: int = 0
     verified: bool
 
 

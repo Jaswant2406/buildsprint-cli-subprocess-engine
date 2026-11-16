@@ -36,6 +36,16 @@ export interface ExtractedFact {
   context?: string;
 }
 
+export interface CoverageBreakdown {
+  score: number;
+  pages_crawled?: number;
+  pages_limit?: number;
+  error_ratio?: number;
+  robots_skips?: number;
+  redirects_blocked?: number;
+  notes?: string;
+}
+
 export interface ChatResult {
   run_id: string;
   status: RunStatus;
@@ -43,6 +53,7 @@ export interface ChatResult {
   plan?: Plan;
   exit_code?: number;
   duration_s?: number;
+  pages_crawled?: number;
   json?: Record<string, unknown>;
   summary?: string;
   key_takeaways?: string[];
@@ -55,8 +66,10 @@ export interface ChatResult {
     [key: string]: unknown;
   };
   security_findings?: SecurityFinding[];
+  coverage?: CoverageBreakdown;
   coverage_score?: number;
   coverage_breakdown?: string;
+  audit_hash?: string;
 }
 
 export interface RunEventPayload {
@@ -80,8 +93,9 @@ export interface AuditRecord {
 
 export interface AuditChain {
   verified: boolean;
-  length: number;
-  records: AuditRecord[];
+  length?: number;
+  entries?: AuditRecord[];
+  records?: AuditRecord[];
 }
 
 export interface HealthResponse {
@@ -106,4 +120,5 @@ export interface RunListItem {
   status?: RunStatus;
   created_at: string;
   duration_s?: number;
+  pages_crawled?: number;
 }

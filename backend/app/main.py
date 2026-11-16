@@ -251,6 +251,10 @@ async def chat(request: Request, body: ChatRequest) -> EventSourceResponse:
         record.end_time = time.monotonic()
         audit_hash = store.finalize(record)
 
+        cov = pp.get("coverage")
+        cov_score = cov.score if cov else None
+        cov_breakdown = cov.notes if cov else None
+
         result = ChatResult(
             run_id=run_id,
             status=pp["status"],
@@ -262,7 +266,9 @@ async def chat(request: Request, body: ChatRequest) -> EventSourceResponse:
             key_takeaways=key_takeaways,
             json=crawl_data,
             json_valid=pp["json_valid"],
-            coverage=pp.get("coverage"),
+            coverage=cov,
+            coverage_score=cov_score,
+            coverage_breakdown=cov_breakdown,
             security_findings=security_findings,
             errors=[str(e) for e in (crawl_data.get("errors", []) if crawl_data else [])],
             evidence=evidence,

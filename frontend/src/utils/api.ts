@@ -48,6 +48,13 @@ export async function fetchRuns(): Promise<RunListItem[]> {
         ? new Date(item.events[0].ts * 1000).toISOString()
         : new Date().toISOString(),
       duration_s: item.duration_s,
+      pages_crawled:
+        item.result?.pages_crawled ??
+        (Array.isArray(item.result?.json?.pages)
+          ? item.result.json.pages.length
+          : Array.isArray(item.result?.pages)
+          ? item.result.pages.length
+          : undefined),
     }));
   }
   return data.runs || [];

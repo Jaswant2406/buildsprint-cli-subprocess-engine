@@ -161,26 +161,51 @@ export const Navbar: React.FC<NavbarProps> = ({
         )}
 
         {/* Audit Chain Badge */}
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '4px 10px',
-            borderRadius: '6px',
-            backgroundColor: audit?.verified ? 'var(--status-success-bg)' : 'var(--page)',
-            color: audit?.verified ? 'var(--status-success-text)' : 'var(--ink)',
-            border: '1px solid var(--hairline)',
-            fontSize: '12px',
-            fontWeight: 600,
-          }}
-          title="Cryptographic SHA-256 hash chaining of all execution logs"
-        >
-          <span>🔒 Audit Chain:</span>
-          <span>
-            {audit?.verified ? `Verified (${formatNumber(audit.length)} blocks)` : 'Checking...'}
-          </span>
-        </div>
+        {(() => {
+          const blockCount = audit
+            ? audit.length ?? audit.records?.length ?? audit.entries?.length ?? 0
+            : 0;
+          let badgeText = 'Checking...';
+          let badgeBg = 'var(--page)';
+          let badgeColor = 'var(--muted)';
+
+          if (audit) {
+            if (!audit.verified) {
+              badgeText = 'Tampered / Invalid';
+              badgeBg = 'var(--status-failed-bg)';
+              badgeColor = 'var(--status-failed-text)';
+            } else if (blockCount === 0) {
+              badgeText = 'Empty (0 blocks)';
+              badgeBg = 'var(--page)';
+              badgeColor = 'var(--muted)';
+            } else {
+              badgeText = `Verified (${formatNumber(blockCount)} blocks)`;
+              badgeBg = 'var(--status-success-bg)';
+              badgeColor = 'var(--status-success-text)';
+            }
+          }
+
+          return (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                backgroundColor: badgeBg,
+                color: badgeColor,
+                border: '1px solid var(--hairline)',
+                fontSize: '12px',
+                fontWeight: 600,
+              }}
+              title="Cryptographic SHA-256 hash chaining of all execution logs"
+            >
+              <span>🔒 Audit Chain:</span>
+              <span>{badgeText}</span>
+            </div>
+          );
+        })()}
 
         <button
           onClick={onRefreshHistory}
