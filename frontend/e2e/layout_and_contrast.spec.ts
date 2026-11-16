@@ -14,11 +14,13 @@ if (!fs.existsSync(SCREENSHOT_DIR)) {
   fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
 }
 
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:8000';
+
 test.describe('BuildSprint UI Layout, Typography & Contrast Audit', () => {
   for (const vp of VIEWPORTS) {
     test(`Layout integrity, computed styles & bounding boxes @ ${vp.width}px (${vp.name})`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await page.goto('http://localhost:5173/');
+      await page.goto(BASE_URL + '/');
       await page.waitForSelector('.hero-headline');
 
       // 1. Computed Style checks
@@ -149,7 +151,7 @@ test.describe('BuildSprint UI Layout, Typography & Contrast Audit', () => {
     // DESKTOP 1440px
     // ==========================================
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('http://localhost:5173/');
+    await page.goto(BASE_URL + '/');
     await page.waitForSelector('.hero-headline');
     await page.waitForTimeout(500);
 
@@ -190,7 +192,7 @@ test.describe('BuildSprint UI Layout, Typography & Contrast Audit', () => {
     // MOBILE 390px
     // ==========================================
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('http://localhost:5173/');
+    await page.goto(BASE_URL + '/');
     await page.waitForSelector('.hero-headline');
     await page.waitForTimeout(500);
 

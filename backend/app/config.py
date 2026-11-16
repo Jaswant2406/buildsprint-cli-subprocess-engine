@@ -19,7 +19,10 @@ class Settings(BaseSettings):
 
     # App
     app_env: str = Field(default="production", alias="APP_ENV")
+    host: str = Field(default="0.0.0.0", alias="HOST")
+    port: int = Field(default=8000, alias="PORT")
     version: str = "1.0.0"
+    enable_docs: bool | None = Field(default=None, alias="ENABLE_DOCS")
 
     # LLM
     llm_provider: str = Field(default="", alias="LLM_PROVIDER")
@@ -31,8 +34,8 @@ class Settings(BaseSettings):
     trusted_proxies: str = Field(default="", alias="TRUSTED_PROXIES")
 
     # Rate limiting
-    rate_limit_requests: int = 5
-    rate_limit_window_s: int = 60
+    rate_limit_requests: int = Field(default=5, alias="RATE_LIMIT_REQUESTS")
+    rate_limit_window_s: int = Field(default=60, alias="RATE_LIMIT_WINDOW_S")
 
     # Concurrency
     max_concurrent_runs: int = 2
@@ -54,10 +57,24 @@ class Settings(BaseSettings):
     max_run_history: int = 100
 
     # CORS
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    allowed_origins: str = Field(default="", alias="ALLOWED_ORIGINS")
 
     # CLI paths (resolved relative to this file's location)
     cli_dir: Path = Path(__file__).parent.parent.parent / "cli"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        if self.allowed_origins.strip():
+            return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
+        if self.app_env == "production":
+            return []
+        return ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"]
+
+    @property
+    def docs_enabled(self) -> bool:
+        if self.enable_docs is not None:
+            return self.enable_docs
+        return self.app_env != "production"
 
     @property
     def llm_mode(self) -> str:

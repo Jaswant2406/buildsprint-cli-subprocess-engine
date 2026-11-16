@@ -7,11 +7,14 @@ import asyncio
 import json
 import time
 import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
 from app.config import get_settings
@@ -30,7 +33,7 @@ from app.models import (
 from app.postprocess import postprocess
 from app.ratelimit import RateLimiter, get_client_ip
 from app.report import generate_report
-from app.runner import TOOL_REGISTRY, get_slot_manager, run_tool_async
+from app.runner import TOOL_REGISTRY, _kill_tree, get_slot_manager, run_tool_async
 from app.runstore import RunRecord, get_store
 from app.security import configure_logging, get_logger, redact_dict
 from app.summarizer import answer_from_data, summarize, summarize_link_check
@@ -40,20 +43,65 @@ configure_logging()
 logger = get_logger(__name__)
 
 settings = get_settings()
-app = FastAPI(title="BuildSprint Backend", version=settings.version)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    yield
+    store = get_store()
+    for rec in store.all_runs():
+        if rec.pid is not None:
+            try:
+                _kill_tree(rec.pid)
+            except Exception:
+                pass
+
+
+docs_url = "/docs" if settings.docs_enabled else None
+redoc_url = "/redoc" if settings.docs_enabled else None
+openapi_url = "/openapi.json" if settings.docs_enabled else None
+
+app = FastAPI(
+    title="BuildSprint Backend",
+    version=settings.version,
+    docs_url=docs_url,
+    redoc_url=redoc_url,
+    openapi_url=openapi_url,
+    lifespan=lifespan,
 )
+
+if settings.cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 _rate_limiter = RateLimiter(
     limit=settings.rate_limit_requests,
     window_s=settings.rate_limit_window_s,
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    content = exc.detail if isinstance(exc.detail, dict) else {"error": str(exc.detail)}
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": content},
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error("Unhandled error processing %s: %s", request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": {"error": "Internal server error"}},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -386,3 +434,30 @@ async def health() -> HealthResponse:
         llm_mode=settings.llm_mode,
         version=settings.version,
     )
+
+
+# ---------------------------------------------------------------------------
+# Single-origin SPA & Static Files Serving
+# ---------------------------------------------------------------------------
+
+_DIST_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if (_DIST_DIR / "assets").is_dir():
+    app.mount("/assets", StaticFiles(directory=str(_DIST_DIR / "assets")), name="assets")
+
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str) -> Response:
+    # Never intercept API calls with HTML SPA fallbacks
+    if full_path == "api" or full_path.startswith("api/"):
+        raise _json_error(404, "API endpoint not found")
+
+    file_path = _DIST_DIR / full_path
+    if full_path and file_path.is_file():
+        return FileResponse(file_path)
+
+    index_path = _DIST_DIR / "index.html"
+    if index_path.is_file():
+        return FileResponse(index_path)
+
+    raise _json_error(404, "Frontend build not found")
+

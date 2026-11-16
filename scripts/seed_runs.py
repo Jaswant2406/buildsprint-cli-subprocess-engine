@@ -9,9 +9,10 @@ scripts/seed_runs.py — Seeds the backend with real runs:
 from __future__ import annotations
 
 import http.server
-from pathlib import Path
 import threading
 import time
+from pathlib import Path
+
 import httpx
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -37,7 +38,7 @@ def consume_chat(prompt: str) -> dict:
     with httpx.Client(timeout=30.0) as client:
         res = client.post(f"{BASE_URL}/api/chat", json={"prompt": prompt})
         text = res.text
-        events = []
+        # parse events
         result_payload = None
         error_payload = None
         run_id = None

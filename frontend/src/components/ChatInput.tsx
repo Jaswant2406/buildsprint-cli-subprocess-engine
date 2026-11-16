@@ -25,8 +25,8 @@ const EXAMPLES = [
     prompt: 'Crawl https://example.com/injection-test, summarize the content, and report any security issues.',
   },
   {
-    label: 'http://localhost (SSRF)',
-    prompt: 'Crawl http://localhost:8000/api/health and return JSON.',
+    label: 'Private IP (SSRF)',
+    prompt: 'Crawl http://10.0.0.1/admin and return JSON.',
   },
 ];
 

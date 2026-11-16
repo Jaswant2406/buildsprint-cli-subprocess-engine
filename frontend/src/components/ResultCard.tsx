@@ -76,7 +76,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
   const reportUrl = `${API_BASE}/api/runs/${result.run_id}/report.md`;
 
   return (
-    <div className="card-panel" style={{ backgroundColor: 'var(--card)' }}>
+    <div data-testid="result-card" className="card-panel result-card" style={{ backgroundColor: 'var(--card)' }}>
       {/* Header with status badge */}
       <div
         style={{

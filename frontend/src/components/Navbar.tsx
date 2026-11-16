@@ -8,6 +8,7 @@ interface NavbarProps {
   backendOnline: boolean;
   onToggleSidebar: () => void;
   onRefreshHistory: () => void;
+  onNavigateHome?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -16,6 +17,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   backendOnline,
   onToggleSidebar,
   onRefreshHistory,
+  onNavigateHome,
 }) => {
   return (
     <header
@@ -55,12 +57,22 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span
+              role="button"
+              tabIndex={0}
+              onClick={onNavigateHome}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onNavigateHome?.();
+                }
+              }}
               style={{
                 fontFamily: 'var(--font-display)',
                 fontWeight: 800,
                 fontSize: '18px',
                 color: 'var(--ink)',
                 letterSpacing: '-0.02em',
+                cursor: onNavigateHome ? 'pointer' : 'default',
               }}
             >
               BuildSprint
