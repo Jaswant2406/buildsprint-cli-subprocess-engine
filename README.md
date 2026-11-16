@@ -129,6 +129,53 @@ python -c "from app.injection import scan_page; print(scan_page('http://test', '
 
 ---
 
+## 🎨 Frontend (React + Vite + TypeScript)
+
+The frontend provides a real-time reactive user interface built with strict design tokens, zero external UI kits, and native CSS variables.
+
+### 🚀 Frontend Quick Start
+```bash
+# 1. Install dependencies
+cd frontend
+npm install
+
+# 2. Start the Vite development server (defaults to http://localhost:5173)
+npm run dev
+```
+
+### ⚙️ Frontend Environment Variables
+Set in `frontend/.env` or shell environment:
+- `VITE_API_BASE`: Target backend URL (default: `http://localhost:8000`).
+
+### 🧪 Frontend Testing & Playwright Verification
+```bash
+cd frontend
+
+# 1. Run Vitest Unit Tests (design tokens, typography, en-IN formatting, SSE parser)
+npm test
+
+# 2. Run Playwright Visual, Collision & Contrast Checks across 4 viewports (1440, 1024, 768, 390px)
+npm run test:e2e
+```
+
+### 📸 Visual Interface & Before/After States
+
+#### 1. Hero Section & Prompt Input
+- **Initial Empty State**: Displaying the Manrope 800 hero headline, active security guardrail chips, prompt input with character limit, and 5 interactive example chips.
+  ![Desktop 1440 Empty State](screenshots/desktop-1440-empty.png)
+- **Active Execution State**: Timeline tracks Validate -> Robots -> Spawn CLI (PID & Argv) -> Crawling n/N -> Parse -> Summarize with live spinner and cancel controls.
+  ![Desktop 1440 Running State](screenshots/desktop-1440-running.png)
+
+#### 2. Execution Result Card & Security Scanner
+- **Successful Crawl Result**: Displays green `SUCCESS` status badge, execution metrics (Exit code, Duration, Pages crawled, Coverage score in `en-IN` format), extractive summary, evidence table with source URLs, and collapsible pretty JSON viewer with `✓ JSON Valid` badge.
+  ![Desktop 1440 Success Result](screenshots/desktop-1440-success.png)
+- **Security Findings Panel (Quarantined Prompt Injection)**: Highlights detected adversarial injection attempts (`ignore_instructions`, `run_command`, `rm -rf`) quarantined safely inside untrusted delimiters.
+  ![Desktop 1440 Injection Findings](screenshots/desktop-1440-injection.png)
+- **Mobile Responsive Layout (390px Viewport)**: Fully responsive collapsible drawer sidebar, single-column adaptive grid, and zero text box collision.
+  ![Mobile 390 Success View](screenshots/mobile-390-success.png)
+
+---
+
 ## 🧪 Testing Suite
 
 Run all tests:
@@ -136,7 +183,7 @@ Run all tests:
 cd backend && ../.venv/Scripts/pytest -v
 ```
 
-**Results**: 108 tests passing covering:
+**Results**: 151 tests passing covering:
 - `test_netpolicy.py` & `test_netpolicy_pinning_redirects.py`: SSRF rules, IP pinning, redirect hops, robots.txt caching, 1MB response limit.
 - `test_clis.py`: Live and local execution of `site_crawler.py` and `link_checker.py`, exit codes `0, 2, 3, 4`, schema invariants.
 - `test_runner.py` & `test_runner_process_management.py`: Slot manager concurrency, state machine immutability, timeout kills, stall watchdogs, tree killing.

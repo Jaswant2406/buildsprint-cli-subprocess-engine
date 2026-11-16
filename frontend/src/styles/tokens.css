@@ -1,0 +1,36 @@
+:root {
+  /* Core brand palette */
+  --ink: #111827;
+  --navy: #1E3A8A;
+  --muted: #616B7A;
+  --page: #F4F5F7;
+  --card: #FFFFFF;
+  --sky: #93C5FD;
+  --sand: #E8DFCB;
+  --hairline: #D9DCE1;
+
+  /* Semantic status tokens (>= 4.5:1 contrast on their badge background) */
+  --status-success-bg: #DCFCE7;
+  --status-success-text: #166534;
+
+  --status-partial-bg: #FEF3C7;
+  --status-partial-text: #92400E;
+
+  --status-failed-bg: #FEE2E2;
+  --status-failed-text: #991B1B;
+
+  --status-timeout-bg: #EDE9FE;
+  --status-timeout-text: #5B21B6;
+
+  --status-cancelled-bg: #E5E7EB;
+  --status-cancelled-text: #374151;
+
+  /* Fonts */
+  --font-display: 'Manrope', 'Segoe UI', Arial, sans-serif;
+  --font-body: 'Inter', 'Segoe UI', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+  /* Focus ring */
+  --focus-ring: 2px solid var(--navy);
+  --focus-offset: 2px;
+}
