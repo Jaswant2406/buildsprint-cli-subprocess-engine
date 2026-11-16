@@ -6,8 +6,8 @@ A production-grade, secure, and resilient execution system for AI-driven web tas
 
 ## Deployment
 
-Deployed URL: not provided; run locally with the steps above.
-
+Deployed URL: https://buildsprint-cli-subprocess-engine.onrender.com
+ 
 ### Minimum Server Requirements
 
 - CPU: 2 vCPU cores minimum (4 vCPU recommended for concurrent crawler subprocesses)
