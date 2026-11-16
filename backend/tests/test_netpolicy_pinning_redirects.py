@@ -4,12 +4,11 @@ from __future__ import annotations
 import socket
 import ssl
 from unittest.mock import MagicMock, patch
-import pytest
 
+import pytest
 from app.netpolicy import (
     ContentTypeError,
     IPPinningError,
-    PinnedTransport,
     RedirectError,
     RedirectPolicy,
     RobotsError,

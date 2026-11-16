@@ -30,15 +30,16 @@ log_stream = io.StringIO()
 handler = logging.StreamHandler(log_stream)
 logging.getLogger().addHandler(handler)
 
-from fastapi.testclient import TestClient
 from app.main import app
 from app.runstore import get_store
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
 # Stand up local demo site server
 import http.server
 import threading
+
 _DEMO_DIR = _BACKEND.parent / "demo_site"
 demo_server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), lambda *args, **kw: http.server.SimpleHTTPRequestHandler(*args, directory=str(_DEMO_DIR), **kw))
 demo_port = demo_server.server_address[1]

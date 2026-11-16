@@ -2,12 +2,10 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
-import pytest
-from fastapi.testclient import TestClient
 
-from app.models import Plan, RunState, RunStatus
+from app.models import RunState
 from app.runstore import RunRecord, get_store
+from fastapi.testclient import TestClient
 
 
 class TestAPIEndpoints:
@@ -310,7 +308,7 @@ class TestAPIEndpoints:
             rec.result = {
                 "run_id": run_id,
                 "status": "SUCCESS",
-                "summary": f"Summary with safe output",
+                "summary": "Summary with safe output",
                 "audit_hash": "hash123",
             }
             store.add(rec)
@@ -363,6 +361,8 @@ class TestAPIEndpoints:
 
     def test_slots_released_across_three_chat_requests(self, app_client: TestClient, local_site: str) -> None:
         """Sequential chat requests beyond slot capacity (2) succeed because slots are released."""
+        from app.main import _rate_limiter
+        _rate_limiter._windows.clear()
         for i in range(3):
             with app_client.stream(
                 "POST",

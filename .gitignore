@@ -25,3 +25,8 @@ htmlcov/
 # OS artifacts
 .DS_Store
 Thumbs.db
+
+# Run & temp artifacts
+artifacts/
+*.tmp
+*.log

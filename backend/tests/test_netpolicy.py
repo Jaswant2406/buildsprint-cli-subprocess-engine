@@ -2,25 +2,17 @@
 from __future__ import annotations
 
 import os
-import socket
-import threading
-import time
 import urllib.parse
-from typing import Generator
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 os.environ["APP_ENV"] = "test"
 os.environ["ALLOW_LOCALHOST_FOR_TESTS"] = "1"
 
+import ipaddress
+
 from app.netpolicy import (
-    ContentTypeError,
-    IPPinningError,
-    NetworkPolicyError,
     PinnedTransport,
-    RedirectError,
-    RedirectPolicy,
     RobotsError,
     SSRFError,
     _is_forbidden_ip,
@@ -30,8 +22,6 @@ from app.netpolicy import (
     clear_robots_cache,
     policy_get,
 )
-import ipaddress
-
 
 # ---------------------------------------------------------------------------
 # IP validation tests
@@ -281,7 +271,7 @@ class TestLocalSiteCrawl:
         """robots.txt should be fetched and respected."""
         clear_robots_cache()
         from app.netpolicy import _get_robots
-        rp = _get_robots("http", f"127.0.0.1:{urllib.parse.urlparse(local_site).port}",
+        _ = _get_robots("http", f"127.0.0.1:{urllib.parse.urlparse(local_site).port}",
                           allow_localhost=True)
         # 404 on robots = None (allow all) or actual robots parsed
         # Either is correct — the point is no crash
@@ -298,17 +288,17 @@ class TestLocalSiteCrawl:
 
 class TestValidatorsAndEdgeCases:
     def test_validate_url_empty_raises(self) -> None:
-        from app.validators import validate_url, ValidationError
+        from app.validators import ValidationError, validate_url
         with pytest.raises(ValidationError, match="required"):
             validate_url("")
 
     def test_validate_url_no_hostname_raises(self) -> None:
-        from app.validators import validate_url, ValidationError
+        from app.validators import ValidationError, validate_url
         with pytest.raises(ValidationError, match="no hostname"):
             validate_url("http:///path/only")
 
     def test_validate_url_regex_creds(self) -> None:
-        from app.validators import validate_url, ValidationError
+        from app.validators import ValidationError, validate_url
         with pytest.raises(ValidationError, match="credentials"):
             validate_url("http://user:secret@example.com")
         with pytest.raises(ValidationError, match="credentials"):

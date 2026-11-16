@@ -6,7 +6,6 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-import pytest
 
 _CLI_DIR = Path(__file__).parent.parent.parent / "cli"
 _SITE_CRAWLER = str(_CLI_DIR / "site_crawler.py")
@@ -121,7 +120,7 @@ class TestLinkCheckerCLI:
         rc, out, _ = _run_cli(_LINK_CHECKER, ["--url", f"{local_site}/index.html"])
         data = json.loads(out)
         # Check that broken link was caught
-        broken = [l for l in data["links"] if l["status"] == "broken"]
+        broken = [lnk for lnk in data["links"] if lnk["status"] == "broken"]
         assert len(broken) > 0 or data["stats"]["broken"] > 0
         assert rc == 2
 
@@ -132,14 +131,14 @@ class TestLinkCheckerCLI:
         data = json.loads(out)
 
         # Check SSRF metadata link
-        ssrf_links = [l for l in data["links"] if "169.254.169.254" in l["url"]]
+        ssrf_links = [lnk for lnk in data["links"] if "169.254.169.254" in lnk["url"]]
         assert len(ssrf_links) == 1
         assert ssrf_links[0]["status"] == "error"
         assert "ssrf_blocked" in ssrf_links[0]["reason"]
         assert ssrf_links[0]["status_code"] is None
 
         # Check robots-disallowed link
-        robots_links = [l for l in data["links"] if "/private/index.html" in l["url"]]
+        robots_links = [lnk for lnk in data["links"] if "/private/index.html" in lnk["url"]]
         assert len(robots_links) == 1
         assert robots_links[0]["status"] == "error"
         assert robots_links[0]["reason"] == "robots_disallowed"

@@ -6,6 +6,7 @@ target-version = "py311"
 select = ["E", "F", "W", "I"]
 ignore = [
     "E501",  # line too long (handled by formatter)
+    "E402",  # module level import not at top of file (sys.path & env setup)
 ]
 
 [tool.mypy]

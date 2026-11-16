@@ -1,8 +1,8 @@
 """Tests for ratelimit: sliding window, retry-after, proxy parsing."""
 from __future__ import annotations
 
-import pytest
 import time
+
 from app.ratelimit import RateLimiter, get_client_ip
 from tests.conftest import FakeClock
 

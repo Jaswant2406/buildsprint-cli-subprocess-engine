@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
+
 from app.extractor import build_extracted
 from app.injection import scan_crawl_result, scan_page
 from app.models import RunState, RunStatus
-from app.postprocess import postprocess, compute_coverage
-from app.summarizer import summarize, summarize_link_check, answer_from_data
+from app.postprocess import compute_coverage, postprocess
+from app.summarizer import answer_from_data, summarize, summarize_link_check
 
 
 class TestPostprocess:
@@ -223,9 +224,10 @@ class TestSummarizer:
         assert "$29" in ans
 
     def test_llm_summarize_wraps_content_in_untrusted_delimiters(self) -> None:
-        from unittest.mock import patch
         from typing import Any
-        from app.summarizer import summarize, _DATA_OPEN, _DATA_CLOSE
+        from unittest.mock import patch
+
+        from app.summarizer import _DATA_CLOSE, _DATA_OPEN, summarize
         captured_prompts = []
 
         def fake_call_llm(system_prompt: str, user_prompt: str, **kwargs: Any) -> str:

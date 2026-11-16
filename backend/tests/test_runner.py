@@ -2,11 +2,8 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
-import threading
-import time
-from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -19,7 +16,6 @@ from app.models import Plan, RunState
 from app.runner import (
     TOOL_REGISTRY,
     _child_env,
-    _kill_tree,
     _transition,
     build_argv,
     get_slot_manager,
@@ -61,7 +57,6 @@ class TestToolRegistry:
 
     def test_popen_called_with_shell_false(self) -> None:
         from app.runner import run_tool
-        from unittest.mock import patch, MagicMock
         record = _make_record("test-shell-check")
         plan = _make_plan()
         with patch("subprocess.Popen") as mock_popen:
@@ -209,7 +204,7 @@ class TestSlotManager:
 
 class TestRunStore:
     def test_history_retrievable_after_completion(self) -> None:
-        from app.runstore import RunStore, RunRecord
+        from app.runstore import RunStore
         store = RunStore()
         rec = _make_record("hist-test-1")
         rec.state = RunState.RUNNING
@@ -224,7 +219,7 @@ class TestRunStore:
         assert found.state == RunState.COMPLETED
 
     def test_evicts_oldest_finished(self) -> None:
-        from app.runstore import RunStore, RunRecord
+        from app.runstore import RunRecord, RunStore
         store = RunStore(max_history=3)
         for i in range(4):
             r = RunRecord(f"run-{i}", {}, [])
@@ -235,7 +230,7 @@ class TestRunStore:
         assert len(store.all_runs()) <= 3
 
     def test_never_evicts_running(self) -> None:
-        from app.runstore import RunStore, RunRecord
+        from app.runstore import RunRecord, RunStore
         store = RunStore(max_history=2)
         # Add running run
         r_running = RunRecord("running-1", {}, [])
@@ -258,7 +253,7 @@ class TestRunStore:
 
 class TestAuditChain:
     def test_chain_verifies(self) -> None:
-        from app.runstore import RunStore, RunRecord
+        from app.runstore import RunRecord, RunStore
         store = RunStore()
         for i in range(3):
             r = RunRecord(f"audit-{i}", {"tool": "site_crawler"}, [])
@@ -270,7 +265,7 @@ class TestAuditChain:
         assert chain.verified
 
     def test_tampering_detected(self) -> None:
-        from app.runstore import RunStore, RunRecord
+        from app.runstore import RunRecord, RunStore
         store = RunStore()
         r = RunRecord("tamper-test", {"tool": "site_crawler"}, [])
         r.stdout = "clean output"
@@ -282,10 +277,10 @@ class TestAuditChain:
         chain = store.audit.get_chain()
         assert not chain.verified
 
-    def test_double_cancel_409(self, app_client: "TestClient") -> None:
+    def test_double_cancel_409(self, app_client: Any) -> None:
         """Cancelling an already-cancelled run returns 409."""
-        from app.runstore import RunRecord, get_store
         import app.runstore as rs
+        from app.runstore import RunRecord
         rs._store = None
         store = get_store()
         r = RunRecord("cancel-test-1", {"tool": "site_crawler"}, [])
@@ -310,8 +305,9 @@ class TestAuditChain:
         sm.release()
 
     def test_security_json_formatter_exception(self) -> None:
-        from app.security import _JSONFormatter
         import logging
+
+        from app.security import _JSONFormatter
         formatter = _JSONFormatter()
         try:
             raise ValueError("test error")

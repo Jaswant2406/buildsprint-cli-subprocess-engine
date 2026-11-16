@@ -5,10 +5,8 @@ import subprocess
 import sys
 import time
 from types import SimpleNamespace
-from unittest.mock import MagicMock
-import psutil
-import pytest
 
+import psutil
 from app.models import Plan, RunState
 from app.runner import SlotManager, _kill_tree, _transition, run_tool
 from app.runstore import RunRecord

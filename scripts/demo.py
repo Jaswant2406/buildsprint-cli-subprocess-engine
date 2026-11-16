@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import sys
-import time
 from pathlib import Path
 
 # Add backend to path
@@ -85,14 +84,14 @@ def run_via_server() -> bool:
 def run_in_process() -> None:
     """Execute end-to-end pipeline in-process if server is not running."""
     print("Running in-process end-to-end pipeline...")
+    from app.extractor import build_extracted
+    from app.injection import scan_crawl_result
     from app.intent import parse_intent
-    from app.validators import validate_url
+    from app.postprocess import postprocess
     from app.runner import run_tool
     from app.runstore import RunRecord, get_store
-    from app.postprocess import postprocess
-    from app.extractor import build_extracted
     from app.summarizer import summarize
-    from app.injection import scan_crawl_result
+    from app.validators import validate_url
 
     print(f"\nTask: \"{PROMPT}\"")
     plan = parse_intent(PROMPT)

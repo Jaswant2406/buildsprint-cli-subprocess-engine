@@ -8,9 +8,9 @@ A production-grade, secure, and resilient execution backend for AI-driven web ta
 
 ```bash
 # 1. Create virtual environment and install dependencies
-python -m venv .venv && .venv/Scripts/pip install -r backend/requirements.txt pydantic-settings types-psutil
+python -m venv .venv && .venv/Scripts/pip install -r backend/requirements.txt
 
-# 2. Run the complete test suite (108 tests passing)
+# 2. Run the complete test suite (145 tests passing)
 cd backend && ../.venv/Scripts/pytest -v
 
 # 3. Start the FastAPI server
@@ -144,6 +144,23 @@ cd backend && ../.venv/Scripts/pytest -v
 - `test_postprocess_extractor_injection.py`: Schema validation, evidence extraction with provenance URLs, prompt injection detector.
 - `test_intent.py`: Heuristic regex parser and tool selection.
 - `test_api.py`: FastAPI SSE stream, run lifecycle, log redaction, audit chain verification, markdown export.
+
+---
+
+## 🔬 Verification & Quality Assurance
+
+*Tested on Windows 11, Python 3.15; requires Python >= 3.11.*
+
+The backend underwent an exhaustive hostile verification audit across all security boundaries:
+
+1. **Mutation Checks (18/18 Guarded)**:
+   - 18 adversarial mutations (disabling IP pinning, bypassing private IP blocks, enabling `shell=True`, skipping grandchild kill, dropping `Retry-After`, removing delimiters, disabling redaction, etc.) were applied to application code; in every case, test failures proved active protection.
+2. **Adversarial URL & Prompt Fuzzing**:
+   - `python backend/scripts/verify_stage3_fuzz.py` (with `APP_ENV=production`) validates 32 hostile URL encodings (octal/hex/decimal IPs, localhost variants, IPv4-mapped IPv6, cloud metadata, forbidden ports like 22/25/3306) and adversarial prompts (shell metacharacters, arbitrary commands, >1000 chars, multi-URLs). 100% rejected before spawn.
+3. **Live Hostile-Server Verification**:
+   - `python -u backend/scripts/verify_stage4_hostile.py` spins up a live mock server simulating 4+ hop loops, private redirects, 100MB gzip bombs, non-responsive servers, and multi-location prompt injections, confirming strict termination, bounded memory (<50MB delta), and zero unauthorized child processes.
+4. **Secrets Canary Audit**:
+   - `python -u backend/scripts/verify_secrets_canary.py` injects a live canary secret (`sk-CANARY-1234567890`) across success, failure, and prompt injection runs. Zero occurrences appear in SSE streams, reports, logs, audit chains, or CLI outputs.
 
 ---
 

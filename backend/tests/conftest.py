@@ -101,7 +101,6 @@ def app_client() -> Generator[TestClient, None, None]:
     # Reset global state
     import app.runstore as rs
     rs._store = None
-    import app.ratelimit as rl
     # Reset config
     import app.config as cfg
     cfg._settings = None
