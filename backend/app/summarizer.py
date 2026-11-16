@@ -738,17 +738,33 @@ def _heuristic_summarize(crawl_data: dict[str, Any]) -> tuple[str, list[str]]:
 def summarize_link_check(link_data: dict[str, Any]) -> tuple[str, list[str]]:
     """Generate summary for link_checker results."""
     stats = link_data.get("stats", {})
+    discovered = stats.get("discovered", stats.get("total_links", stats.get("checked", 0)))
     checked = stats.get("checked", 0)
     working = stats.get("working", 0)
     broken = stats.get("broken", 0)
     site = link_data.get("site", "")
+    takeaways: list[str] = []
+
+    if discovered == 0 or checked == 0:
+        summary = (
+            f"Link check of {site} completed. No links found to check.\n\n"
+            f"- Links discovered: {discovered}\n"
+            f"- Links checked: {checked}\n"
+            f"- Working: {working}\n"
+            f"- Broken: {broken}"
+        )
+        takeaways = [
+            "No links found to check.",
+            "No testable links found.",
+            f"Links discovered: {discovered}, Links checked: {checked}, Working: {working}, Broken: {broken}",
+        ]
+        return summary, takeaways
 
     summary = (
         f"Link check of {site} completed. "
         f"Checked {checked} links: {working} working, {broken} broken."
     )
 
-    takeaways: list[str] = []
     if broken == 0:
         takeaways.append(f"All {working} links are working correctly.")
     else:

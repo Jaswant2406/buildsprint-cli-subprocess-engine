@@ -760,4 +760,289 @@ describe('Timeline DNS Failure & Step States', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('handles zero links discovered in link_checker: shows "No links found to check.", displays "No testable links found" without 100% link health', async () => {
+    const zeroLinksResult: ChatResult = {
+      run_id: 'test-zero-links-1',
+      status: 'PARTIAL',
+      status_reason: 'No links found to check.',
+      exit_code: 0,
+      duration_s: 0.85,
+      coverage_score: null,
+      coverage: {
+        score: null,
+        pages_crawled: 0,
+        pages_discovered: 0,
+        pages_limit: 25,
+        page_limit_utilization: 0,
+        discovered_ratio: 0,
+        coverage_established: false,
+        error_ratio: 0,
+        notes: 'Links discovered: 0, Links checked: 0, Working: 0, Broken: 0',
+      },
+      plan: {
+        task_type: 'link_check',
+        tool: 'link_checker',
+        tool_reason: 'Check for broken links',
+        url: 'https://example.com',
+        max_pages: 10,
+        max_depth: 2,
+        wants_summary: true,
+        wants_json: true,
+        extract_focus: '',
+        max_links: 25,
+      },
+      json: {
+        site: 'https://example.com',
+        links: [],
+        stats: {
+          discovered: 0,
+          total_links: 0,
+          checked: 0,
+          working: 0,
+          broken: 0,
+        },
+        status: 'no_testable_links_found',
+        message: 'No links found to check.',
+      },
+      summary: 'Link check of https://example.com completed. No links found to check.',
+      key_takeaways: ['No links found to check.', 'No testable links found.'],
+    };
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <ResultCard
+          result={zeroLinksResult}
+          onOpenLogs={() => {}}
+          onReplay={() => {}}
+        />
+      );
+    });
+
+    const cardText = container.textContent || '';
+
+    // 1. Must display "No links found to check." as status reason
+    expect(cardText).toContain('No links found to check.');
+    expect(cardText).not.toContain('all 0 links working');
+
+    // 2. Must show Links discovered: 0, Links checked: 0, Working: 0, Broken: 0
+    expect(cardText).toContain('Links Discovered');
+    expect(cardText).toContain('Links Checked');
+    expect(cardText).toContain('Working');
+    expect(cardText).toContain('Broken');
+    expect(cardText).toContain('Links discovered: 0, Links checked: 0, Working: 0, Broken: 0');
+
+    // 3. Must display "No testable links found" rather than a successful link-validation result (PARTIAL status)
+    expect(cardText).toContain('No testable links found');
+    const badge = container.querySelector('.badge-status');
+    expect(badge?.textContent).toBe('PARTIAL');
+
+    // 4. Must NOT calculate or display 100% link health when denominator is zero
+    const covScoreEl = container.querySelector('[data-testid="coverage-score-card"]');
+    expect(covScoreEl?.textContent).not.toContain('100%');
+    expect(covScoreEl?.textContent).toContain('No testable links found');
+
+    // 5. Test Timeline rendering for zero links
+    const events: RunEventPayload[] = [
+      { event: 'plan', data: zeroLinksResult.plan! },
+      { event: 'spawned', data: { pid: 1234 } },
+      { event: 'result', data: zeroLinksResult },
+    ];
+
+    await act(async () => {
+      root.render(
+        <ExecutionTimeline
+          events={events}
+          isRunning={false}
+          onCancel={() => {}}
+        />
+      );
+    });
+
+    const timelineText = container.textContent || '';
+    expect(timelineText).toContain('No links found to check.');
+    expect(timelineText).not.toContain('all 0 links working');
+    expect(timelineText).not.toContain('Checked 0 of 0 links');
+  });
+
+  it('handles all working links in link_checker: displays working metrics, 100% health, and timeline summary', async () => {
+    const allWorkingResult: ChatResult = {
+      run_id: 'test-working-links-2',
+      status: 'SUCCESS',
+      status_reason: 'all 5 links working',
+      exit_code: 0,
+      duration_s: 1.25,
+      coverage_score: 100,
+      coverage: {
+        score: 100,
+        pages_crawled: 5,
+        pages_discovered: 5,
+        pages_limit: 25,
+        page_limit_utilization: 20,
+        discovered_ratio: 100,
+        coverage_established: true,
+        error_ratio: 0,
+        notes: '5/5 links working, 0 broken',
+      },
+      plan: {
+        task_type: 'link_check',
+        tool: 'link_checker',
+        tool_reason: 'Check for broken links',
+        url: 'https://example.com/links',
+        max_pages: 10,
+        max_depth: 2,
+        wants_summary: true,
+        wants_json: true,
+        extract_focus: '',
+        max_links: 25,
+      },
+      json: {
+        site: 'https://example.com/links',
+        links: [
+          { url: 'https://example.com/1', status: 'working', status_code: 200 },
+          { url: 'https://example.com/2', status: 'working', status_code: 200 },
+          { url: 'https://example.com/3', status: 'working', status_code: 200 },
+          { url: 'https://example.com/4', status: 'working', status_code: 200 },
+          { url: 'https://example.com/5', status: 'working', status_code: 200 },
+        ],
+        stats: {
+          discovered: 5,
+          total_links: 5,
+          checked: 5,
+          working: 5,
+          broken: 0,
+        },
+      },
+      summary: 'Link check completed. 5 working, 0 broken.',
+      key_takeaways: ['All 5 links are working correctly.'],
+    };
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <ResultCard
+          result={allWorkingResult}
+          onOpenLogs={() => {}}
+          onReplay={() => {}}
+        />
+      );
+    });
+
+    const cardText = container.textContent || '';
+    expect(cardText).toContain('all 5 links working');
+    expect(cardText).toContain('100%');
+    expect(cardText).toContain('5/5 links working, 0 broken');
+
+    // Timeline check
+    const events: RunEventPayload[] = [
+      { event: 'plan', data: allWorkingResult.plan! },
+      { event: 'spawned', data: { pid: 1234 } },
+      { event: 'result', data: allWorkingResult },
+    ];
+
+    await act(async () => {
+      root.render(
+        <ExecutionTimeline
+          events={events}
+          isRunning={false}
+          onCancel={() => {}}
+        />
+      );
+    });
+
+    const timelineText = container.textContent || '';
+    expect(timelineText).toContain('Checked 5 of 5 links (0 broken)');
+  });
+
+  it('handles broken links in link_checker: displays broken metrics, partial status, and timeline summary', async () => {
+    const brokenResult: ChatResult = {
+      run_id: 'test-broken-links-3',
+      status: 'PARTIAL',
+      status_reason: '2 of 5 links broken/error',
+      exit_code: 2,
+      duration_s: 1.5,
+      coverage_score: 64,
+      coverage: {
+        score: 64,
+        pages_crawled: 5,
+        pages_discovered: 5,
+        pages_limit: 25,
+        page_limit_utilization: 20,
+        discovered_ratio: 100,
+        coverage_established: false,
+        error_ratio: 0.4,
+        notes: '3/5 links working, 2 broken',
+      },
+      plan: {
+        task_type: 'link_check',
+        tool: 'link_checker',
+        tool_reason: 'Check for broken links',
+        url: 'https://example.com/catalog',
+        max_pages: 10,
+        max_depth: 2,
+        wants_summary: true,
+        wants_json: true,
+        extract_focus: '',
+        max_links: 25,
+      },
+      json: {
+        site: 'https://example.com/catalog',
+        links: [
+          { url: 'https://example.com/item1', status: 'working', status_code: 200 },
+          { url: 'https://example.com/item2', status: 'working', status_code: 200 },
+          { url: 'https://example.com/item3', status: 'working', status_code: 200 },
+          { url: 'https://example.com/bad1', status: 'broken', status_code: 404 },
+          { url: 'https://example.com/bad2', status: 'broken', status_code: 500 },
+        ],
+        stats: {
+          discovered: 5,
+          total_links: 5,
+          checked: 5,
+          working: 3,
+          broken: 2,
+        },
+      },
+      summary: 'Link check completed. 3 working, 2 broken.',
+      key_takeaways: ['2 broken link(s) found.'],
+    };
+
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <ResultCard
+          result={brokenResult}
+          onOpenLogs={() => {}}
+          onReplay={() => {}}
+        />
+      );
+    });
+
+    const cardText = container.textContent || '';
+    expect(cardText).toContain('2 of 5 links broken/error');
+    expect(cardText).toContain('3/5 links working, 2 broken');
+
+    const badge = container.querySelector('.badge-status');
+    expect(badge?.textContent).toBe('PARTIAL');
+
+    // Timeline check
+    const events: RunEventPayload[] = [
+      { event: 'plan', data: brokenResult.plan! },
+      { event: 'spawned', data: { pid: 1234 } },
+      { event: 'result', data: brokenResult },
+    ];
+
+    await act(async () => {
+      root.render(
+        <ExecutionTimeline
+          events={events}
+          isRunning={false}
+          onCancel={() => {}}
+        />
+      );
+    });
+
+    const timelineText = container.textContent || '';
+    expect(timelineText).toContain('Checked 5 of 5 links (2 broken)');
+  });
 });

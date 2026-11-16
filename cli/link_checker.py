@@ -174,7 +174,7 @@ def check_links(
         return {
             "site": start_url,
             "links": [],
-            "stats": {"checked": 0, "working": 0, "broken": 0},
+            "stats": {"discovered": 0, "total_links": 0, "checked": 0, "working": 0, "broken": 0},
             "_robots_blocked": True,
         }
     except SSRFError:
@@ -233,15 +233,23 @@ def check_links(
             entry["reason"] = r["reason"]
         output_links.append(entry)
 
-    return {
+    discovered = len(raw_links)
+    res_dict: dict[str, Any] = {
         "site": start_url,
         "links": output_links,
         "stats": {
+            "discovered": discovered,
+            "total_links": discovered,
             "checked": checked,
             "working": working,
             "broken": broken,
         },
     }
+    if discovered == 0:
+        res_dict["status"] = "no_testable_links_found"
+        res_dict["message"] = "No links found to check."
+
+    return res_dict
 
 
 def main() -> int:
@@ -281,15 +289,15 @@ Exit codes:
             allow_localhost=allow_localhost,
         )
     except SSRFError as e:
-        err = {"site": args.url, "links": [], "stats": {"checked": 0, "working": 0, "broken": 0}, "error": str(e)}
+        err = {"site": args.url, "links": [], "stats": {"discovered": 0, "total_links": 0, "checked": 0, "working": 0, "broken": 0}, "error": str(e)}
         print(json.dumps(err))
         return 4
     except RobotsError:
-        err = {"site": args.url, "links": [], "stats": {"checked": 0, "working": 0, "broken": 0}}
+        err = {"site": args.url, "links": [], "stats": {"discovered": 0, "total_links": 0, "checked": 0, "working": 0, "broken": 0}}
         print(json.dumps(err))
         return 3
     except Exception as e:
-        err = {"site": args.url, "links": [], "stats": {"checked": 0, "working": 0, "broken": 0}, "error": str(e)}
+        err = {"site": args.url, "links": [], "stats": {"discovered": 0, "total_links": 0, "checked": 0, "working": 0, "broken": 0}, "error": str(e)}
         print(json.dumps(err))
         e_lower = str(e).lower()
         if any(w in e_lower for w in ("dns", "resolution", "nodename", "connect", "unreachable", "getaddrinfo", "refused", "name or service not known")):

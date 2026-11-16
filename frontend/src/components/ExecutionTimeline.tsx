@@ -232,9 +232,13 @@ export const ExecutionTimeline: React.FC<ExecutionTimelineProps> = ({
           const json = res.json as Record<string, unknown> | undefined;
           if (json && 'links' in json) {
             const stats = json.stats as Record<string, number> | undefined;
+            const discovered = stats?.discovered ?? stats?.total_links ?? stats?.checked ?? 0;
             const checked = stats?.checked ?? 0;
-            const total = stats?.total_links ?? checked;
+            const total = stats?.total_links ?? (stats?.discovered ?? checked);
             const broken = stats?.broken ?? 0;
+            if (discovered === 0 || (checked === 0 && total === 0)) {
+              return 'No links found to check.';
+            }
             return `Checked ${formatNumber(checked)} of ${formatNumber(total)} links (${formatNumber(broken)} broken)`;
           }
           const pagesCrawled =

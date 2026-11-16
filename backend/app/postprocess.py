@@ -100,17 +100,32 @@ def compute_coverage(data: dict[str, Any], plan_dict: dict[str, Any]) -> Coverag
         checked = stats.get("checked", 0)
         working = stats.get("working", 0)
         broken = stats.get("broken", 0)
-        total = stats.get("total_links", checked)
+        discovered = stats.get("discovered", stats.get("total_links", checked))
+
+        if discovered == 0 or checked == 0:
+            # Denominator is zero - do not calculate 100% link health
+            return CoverageBreakdown(
+                score=None,
+                pages_crawled=0,
+                pages_discovered=discovered,
+                pages_limit=pages_limit,
+                page_limit_utilization=0.0,
+                discovered_ratio=0.0,
+                coverage_established=False,
+                error_ratio=0.0,
+                notes=f"Links discovered: {discovered}, Links checked: 0, Working: 0, Broken: 0",
+            )
+
         ratio = working / max(checked, 1)
         score = int(ratio * 90 + 10)
         score = max(0, min(100, score))
         notes = f"{working}/{checked} links working, {broken} broken"
         limit_utilization = round((checked / max(pages_limit, 1)) * 100, 2)
-        discovered_ratio = round((checked / max(total, 1)) * 100, 2)
+        discovered_ratio = round((checked / max(discovered, 1)) * 100, 2)
         return CoverageBreakdown(
             score=score,
             pages_crawled=checked,
-            pages_discovered=total,
+            pages_discovered=discovered,
             pages_limit=pages_limit,
             page_limit_utilization=limit_utilization,
             discovered_ratio=discovered_ratio,
@@ -151,11 +166,14 @@ def _build_status_reason(
 
     elif "links" in data:
         stats = data.get("stats", {})
+        discovered = stats.get("discovered", stats.get("total_links", stats.get("checked", 0)))
         broken = stats.get("broken", 0)
-        total = stats.get("checked", 0)
+        checked = stats.get("checked", 0)
+        if discovered == 0 or checked == 0:
+            return "No links found to check."
         if broken:
-            return f"{broken} of {total} links broken/error"
-        return f"all {total} links working"
+            return f"{broken} of {checked} links broken/error"
+        return f"all {checked} links working"
 
     return "output parsed successfully"
 
@@ -221,8 +239,16 @@ def postprocess(
     # Determine status from exit code + data
     if exit_code == 0:
         # Validate required fields
-        if "pages" in data or "links" in data:
+        if "pages" in data:
             status = RunStatus.SUCCESS
+        elif "links" in data:
+            stats = data.get("stats", {})
+            discovered = stats.get("discovered", stats.get("total_links", stats.get("checked", 0)))
+            checked = stats.get("checked", 0)
+            if discovered == 0 or checked == 0:
+                status = RunStatus.PARTIAL
+            else:
+                status = RunStatus.SUCCESS
         else:
             status = RunStatus.FAILED
             json_valid = False

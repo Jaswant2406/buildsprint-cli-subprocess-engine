@@ -50,18 +50,41 @@ export const ResultCard: React.FC<ResultCardProps> = ({
     result.coverage?.discovered_ratio ??
     (pagesDiscovered > 0 ? (pagesCrawled / pagesDiscovered) * 100 : 100);
 
-  const isFullWebsiteCoverage =
-    result.coverage?.coverage_established === true ||
-    (result.coverage?.coverage_established === undefined &&
-      (result.coverage?.score === 100 || result.coverage_score === 100) &&
-      pagesCrawled !== 1 &&
-      pagesDiscovered <= pagesCrawled);
+  const isLinkChecker = Boolean(
+    result.plan?.tool === 'link_checker' ||
+    (result.json && typeof result.json === 'object' && 'links' in result.json)
+  );
 
-  const scoreDisplay = isFullWebsiteCoverage
-    ? formatPercent(covScore)
-    : pagesCrawled <= 1
-    ? 'Coverage not fully established'
-    : `${discRatio.toFixed(2)}%`;
+  const linkStats = (result.json as any)?.stats;
+  const linksDiscovered = linkStats?.discovered ?? linkStats?.total_links ?? linkStats?.checked ?? 0;
+  const linksChecked = linkStats?.checked ?? 0;
+  const linksWorking = linkStats?.working ?? 0;
+  const linksBroken = linkStats?.broken ?? 0;
+
+  const isFullWebsiteCoverage =
+    !isLinkChecker &&
+    (result.coverage?.coverage_established === true ||
+      (result.coverage?.coverage_established === undefined &&
+        (result.coverage?.score === 100 || result.coverage_score === 100) &&
+        pagesCrawled !== 1 &&
+        pagesDiscovered <= pagesCrawled));
+
+  let scoreDisplay: string;
+  if (isLinkChecker) {
+    if (linksDiscovered === 0 || linksChecked === 0) {
+      scoreDisplay = 'No testable links found';
+    } else if (covScore !== null && covScore !== undefined) {
+      scoreDisplay = formatPercent(covScore);
+    } else {
+      scoreDisplay = `${linksWorking}/${linksChecked} working`;
+    }
+  } else {
+    scoreDisplay = isFullWebsiteCoverage
+      ? formatPercent(covScore)
+      : pagesCrawled <= 1
+      ? 'Coverage not fully established'
+      : `${discRatio.toFixed(2)}%`;
+  }
 
   // Flatten extracted facts
   const extractedList: Array<{ type: string; value: string; source_url: string }> = [];
@@ -262,24 +285,104 @@ export const ResultCard: React.FC<ResultCardProps> = ({
           </span>
         </div>
 
-        <div
-          style={{
-            padding: '12px 16px',
-            backgroundColor: 'var(--page)',
-            borderRadius: '8px',
-            border: '1px solid var(--hairline)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
-          }}
-        >
-          <span className="eyebrow" style={{ color: 'var(--muted)' }}>
-            Pages Crawled
-          </span>
-          <span className="tabular-num" style={{ fontSize: '20px', color: 'var(--ink)' }}>
-            {formatNumber(pagesCrawled)}
-          </span>
-        </div>
+        {!isLinkChecker ? (
+          <div
+            style={{
+              padding: '12px 16px',
+              backgroundColor: 'var(--page)',
+              borderRadius: '8px',
+              border: '1px solid var(--hairline)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+            }}
+          >
+            <span className="eyebrow" style={{ color: 'var(--muted)' }}>
+              Pages Crawled
+            </span>
+            <span className="tabular-num" style={{ fontSize: '20px', color: 'var(--ink)' }}>
+              {formatNumber(pagesCrawled)}
+            </span>
+          </div>
+        ) : (
+          <>
+            <div
+              style={{
+                padding: '12px 16px',
+                backgroundColor: 'var(--page)',
+                borderRadius: '8px',
+                border: '1px solid var(--hairline)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
+            >
+              <span className="eyebrow" style={{ color: 'var(--muted)' }}>
+                Links Discovered
+              </span>
+              <span className="tabular-num" style={{ fontSize: '20px', color: 'var(--ink)' }}>
+                {formatNumber(linksDiscovered)}
+              </span>
+            </div>
+
+            <div
+              style={{
+                padding: '12px 16px',
+                backgroundColor: 'var(--page)',
+                borderRadius: '8px',
+                border: '1px solid var(--hairline)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
+            >
+              <span className="eyebrow" style={{ color: 'var(--muted)' }}>
+                Links Checked
+              </span>
+              <span className="tabular-num" style={{ fontSize: '20px', color: 'var(--ink)' }}>
+                {formatNumber(linksChecked)}
+              </span>
+            </div>
+
+            <div
+              style={{
+                padding: '12px 16px',
+                backgroundColor: 'var(--page)',
+                borderRadius: '8px',
+                border: '1px solid var(--hairline)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
+            >
+              <span className="eyebrow" style={{ color: 'var(--muted)' }}>
+                Working
+              </span>
+              <span className="tabular-num" style={{ fontSize: '20px', color: 'var(--status-success-text)' }}>
+                {formatNumber(linksWorking)}
+              </span>
+            </div>
+
+            <div
+              style={{
+                padding: '12px 16px',
+                backgroundColor: 'var(--page)',
+                borderRadius: '8px',
+                border: '1px solid var(--hairline)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px',
+              }}
+            >
+              <span className="eyebrow" style={{ color: 'var(--muted)' }}>
+                Broken
+              </span>
+              <span className="tabular-num" style={{ fontSize: '20px', color: linksBroken > 0 ? 'var(--status-failed-text)' : 'var(--ink)' }}>
+                {formatNumber(linksBroken)}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Coverage Score Card */}
@@ -320,7 +423,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
           <span
             className="tabular-num"
             style={{
-              fontSize: isFullWebsiteCoverage || pagesDiscovered > pagesCrawled ? '22px' : '16px',
+              fontSize: isFullWebsiteCoverage || (!isLinkChecker && pagesDiscovered > pagesCrawled) ? '22px' : '16px',
               fontWeight: 700,
               color: 'var(--ink)',
               whiteSpace: 'nowrap',
@@ -348,7 +451,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({
           )}
         </div>
 
-        {pagesDiscovered > 1 && (
+        {pagesDiscovered > 1 && !isLinkChecker && (
           <div
             style={{
               display: 'flex',

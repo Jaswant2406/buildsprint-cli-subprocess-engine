@@ -321,6 +321,110 @@ class TestSummarizer:
         assert "1 broken" in summary
         assert any("Broken:" in t for t in takeaways)
 
+    def test_link_checker_zero_links_postprocess_and_coverage(self) -> None:
+        """Regression test for zero-links found:
+        - Must NOT calculate 100% link health when denominator is zero.
+        - Status must be PARTIAL ('No testable links found') rather than SUCCESS.
+        - Status reason must be 'No links found to check.'
+        - Summary and takeaways must clearly state no links found.
+        """
+        zero_links_data = {
+            "site": "https://example.com",
+            "links": [],
+            "stats": {"discovered": 0, "total_links": 0, "checked": 0, "working": 0, "broken": 0},
+            "status": "no_testable_links_found",
+            "message": "No links found to check.",
+        }
+        plan_dict = {"tool": "link_checker", "max_links": 25, "url": "https://example.com"}
+
+        # 1. Coverage calculation
+        cov = compute_coverage(zero_links_data, plan_dict)
+        assert cov.score is None, "Score must be None when denominator is zero, never 100%"
+        assert cov.coverage_established is False
+        assert cov.pages_crawled == 0
+        assert cov.pages_discovered == 0
+        assert "Links discovered: 0" in cov.notes
+        assert "Links checked: 0" in cov.notes
+        assert "Working: 0" in cov.notes
+        assert "Broken: 0" in cov.notes
+
+        # 2. Postprocess
+        pp = postprocess(json.dumps(zero_links_data), exit_code=0, state=RunState.COMPLETED, plan_dict=plan_dict)
+        assert pp["status"] == RunStatus.PARTIAL, "Zero links found must be PARTIAL, not SUCCESS"
+        assert pp["status_reason"] == "No links found to check."
+        assert pp["json_valid"] is True
+        assert pp["data"]["status"] == "no_testable_links_found"
+        assert pp["data"]["message"] == "No links found to check."
+
+        # 3. Summarizer
+        summary, takeaways = summarize_link_check(zero_links_data)
+        assert "No links found to check." in summary
+        assert "Links discovered: 0" in summary
+        assert "Links checked: 0" in summary
+        assert "Working: 0" in summary
+        assert "Broken: 0" in summary
+        assert "No links found to check." in takeaways
+        assert "No testable links found." in takeaways
+        assert not any("All 0 links" in t for t in takeaways)
+
+    def test_link_checker_all_working_links_postprocess_and_coverage(self) -> None:
+        """Regression test for all working links:
+        - When all discovered links are checked and working, coverage score is 100%.
+        - Status is SUCCESS with reason 'all X links working'.
+        """
+        working_data = {
+            "site": "https://example.com",
+            "links": [
+                {"url": "https://example.com/1", "status": "working", "status_code": 200},
+                {"url": "https://example.com/2", "status": "working", "status_code": 200},
+            ],
+            "stats": {"discovered": 2, "total_links": 2, "checked": 2, "working": 2, "broken": 0},
+        }
+        plan_dict = {"tool": "link_checker", "max_links": 25, "url": "https://example.com"}
+
+        cov = compute_coverage(working_data, plan_dict)
+        assert cov.score == 100
+        assert cov.coverage_established is True
+        assert cov.pages_crawled == 2
+        assert cov.pages_discovered == 2
+        assert "2/2 links working, 0 broken" in cov.notes
+
+        pp = postprocess(json.dumps(working_data), exit_code=0, state=RunState.COMPLETED, plan_dict=plan_dict)
+        assert pp["status"] == RunStatus.SUCCESS
+        assert pp["status_reason"] == "all 2 links working"
+
+        summary, takeaways = summarize_link_check(working_data)
+        assert "2 working, 0 broken" in summary
+        assert "All 2 links are working correctly." in takeaways
+
+    def test_link_checker_broken_links_postprocess_and_coverage(self) -> None:
+        """Regression test for broken links:
+        - Status is PARTIAL with reason indicating broken links.
+        - Coverage reflects broken links and coverage is not established.
+        """
+        broken_data = {
+            "site": "https://example.com",
+            "links": [
+                {"url": "https://example.com/1", "status": "working", "status_code": 200},
+                {"url": "https://example.com/2", "status": "broken", "status_code": 404},
+            ],
+            "stats": {"discovered": 2, "total_links": 2, "checked": 2, "working": 1, "broken": 1},
+        }
+        plan_dict = {"tool": "link_checker", "max_links": 25, "url": "https://example.com"}
+
+        cov = compute_coverage(broken_data, plan_dict)
+        assert cov.score < 100
+        assert cov.coverage_established is False
+        assert "1/2 links working, 1 broken" in cov.notes
+
+        pp = postprocess(json.dumps(broken_data), exit_code=2, state=RunState.COMPLETED, plan_dict=plan_dict)
+        assert pp["status"] == RunStatus.PARTIAL
+        assert pp["status_reason"] == "1 of 2 links broken/error"
+
+        summary, takeaways = summarize_link_check(broken_data)
+        assert "1 broken" in summary
+        assert any("Broken:" in t for t in takeaways)
+
     def test_answer_from_data_cites_source(self) -> None:
         crawl_data = {
             "pages": [

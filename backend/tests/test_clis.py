@@ -170,3 +170,39 @@ class TestLinkCheckerCLI:
 
         # Assert via server_requests fixture that /private/index.html was NEVER requested
         assert "/private/index.html" not in server_requests
+
+    def test_link_checker_zero_links_found(self, local_site: str) -> None:
+        """Regression test: when 0 links are discovered, link_checker outputs valid explanatory JSON."""
+        rc, out, _ = _run_cli(_LINK_CHECKER, ["--url", f"{local_site}/no_links.html"])
+        assert rc == 0
+        data = json.loads(out)
+        assert data["site"] == f"{local_site}/no_links.html"
+        assert data["links"] == []
+        assert data["stats"]["discovered"] == 0
+        assert data["stats"]["checked"] == 0
+        assert data["stats"]["working"] == 0
+        assert data["stats"]["broken"] == 0
+        assert data["status"] == "no_testable_links_found"
+        assert data["message"] == "No links found to check."
+
+    def test_link_checker_all_working_links(self, local_site: str) -> None:
+        """Regression test: all discoverable links working returns rc 0 and correct stats."""
+        rc, out, _ = _run_cli(_LINK_CHECKER, ["--url", f"{local_site}/working_links.html"])
+        assert rc == 0
+        data = json.loads(out)
+        assert data["stats"]["discovered"] == 2
+        assert data["stats"]["checked"] == 2
+        assert data["stats"]["working"] == 2
+        assert data["stats"]["broken"] == 0
+        assert len(data["links"]) == 2
+        for lnk in data["links"]:
+            assert lnk["status"] == "working"
+
+    def test_link_checker_broken_links_returns_rc2(self, local_site: str) -> None:
+        """Regression test: broken links return rc 2 with broken link details."""
+        rc, out, _ = _run_cli(_LINK_CHECKER, ["--url", f"{local_site}/index.html"])
+        assert rc == 2
+        data = json.loads(out)
+        assert data["stats"]["checked"] > 0
+        assert data["stats"]["broken"] > 0
+        assert any(lnk["status"] == "broken" for lnk in data["links"])
